@@ -5,8 +5,8 @@
 
 // Your WhatsApp / phone number in international format, digits only.
 // Example: "919876543210" for +91 98765 43210.
-const KITCHEN_WHATSAPP = "919999999999";
-const KITCHEN_PHONE_DISPLAY = "+91 99999 99999";
+const KITCHEN_WHATSAPP = "919623836382";
+const KITCHEN_PHONE_DISPLAY = "+91 96238 36382";
 
 // Menu: each category has a name and a list of items { name, price, unit }.
 // "unit" is shown next to the price, e.g. "per plate", "per kg", "per 10 pcs".
