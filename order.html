@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Order — Vaatsalya Kitchens</title>
+  <meta name="description" content="Order home-style food from Vaatsalya Kitchens in three easy steps — choose dishes, share your details, send on WhatsApp or call." />
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="container">
+      <a class="brand" href="index.html">
+        <img class="brand-mark" src="assets/logo.svg" alt="" />
+        <span class="brand-name">Vaatsalya Kitchens</span>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a href="index.html">← Back to Home</a>
+        <a id="nav-call" class="btn btn-primary" href="tel:+919999999999">📞 Call Us</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <div class="order-header">
+      <h1>Place Your Order</h1>
+      <p class="section-sub">Just three easy steps. If anything is confusing, simply call us — we will take your order on the phone with a smile.</p>
+    </div>
+
+    <!-- Step 1: choose dishes -->
+    <h2 class="order-step-title"><span class="num" aria-hidden="true">1</span> Choose your dishes</h2>
+    <p class="hint">Use the <strong>+</strong> and <strong>−</strong> buttons to set how many you want.</p>
+    <div id="menu-root"><!-- built by js/order.js from js/menu.js --></div>
+
+    <!-- Step 2: details -->
+    <h2 class="order-step-title"><span class="num" aria-hidden="true">2</span> Tell us about yourself</h2>
+    <form id="order-form" class="order-form">
+      <label for="cust-name">Your name</label>
+      <input id="cust-name" name="name" type="text" autocomplete="name" placeholder="e.g. Sunita Sharma" required />
+
+      <label for="cust-phone">Phone number</label>
+      <input id="cust-phone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" placeholder="e.g. 98765 43210" required />
+
+      <label for="occasion">What is the occasion? <span class="hint">(optional)</span></label>
+      <select id="occasion" name="occasion">
+        <option value="">Choose one…</option>
+        <option>Small Party</option>
+        <option>Kitty Party</option>
+        <option>Bulk Order / Event</option>
+        <option>Daily Meal</option>
+        <option>Other</option>
+      </select>
+
+      <label for="when">When do you need the food?</label>
+      <input id="when" name="when" type="text" placeholder="e.g. Saturday 20 July, 1 PM" required />
+
+      <label for="address">Delivery address <span class="hint">(leave blank for pickup)</span></label>
+      <textarea id="address" name="address" rows="3" placeholder="House no., street, area…"></textarea>
+
+      <label for="notes">Anything else we should know? <span class="hint">(less spicy, no onion-garlic, etc.)</span></label>
+      <textarea id="notes" name="notes" rows="2"></textarea>
+    </form>
+
+    <!-- Step 3: review & send -->
+    <h2 class="order-step-title"><span class="num" aria-hidden="true">3</span> Review and send</h2>
+    <div class="summary-box" aria-live="polite">
+      <h3>Your order so far</h3>
+      <ul id="summary-list"><li>Nothing selected yet — use the + buttons above.</li></ul>
+      <p class="summary-total"><span>Estimated total</span> <span id="summary-total">₹0</span></p>
+      <p class="hint">Final price is confirmed by us on the phone — delivery charges may apply.</p>
+    </div>
+
+    <p id="order-error" class="error-msg" role="alert"></p>
+
+    <div class="order-actions">
+      <button id="send-whatsapp" class="btn btn-whatsapp btn-big" type="button">💬 Send Order on WhatsApp</button>
+      <a id="call-instead" class="btn btn-maroon btn-big" href="tel:+919999999999">📞 Prefer talking? Call us instead</a>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p><strong>Vaatsalya Kitchens</strong> · <span lang="hi">वात्सल्य</span> — food with motherly love</p>
+      <p class="gstin">GSTIN: 09AVYPM7231Q1ZE</p>
+    </div>
+  </footer>
+
+  <script src="js/menu.js"></script>
+  <script src="js/order.js"></script>
+</body>
+</html>
