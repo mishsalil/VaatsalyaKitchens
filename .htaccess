@@ -1,0 +1,12 @@
+# Old static URLs → new PHP pages
+RedirectMatch 301 ^/index\.html$ /index.php
+RedirectMatch 301 ^/order\.html$ /order.php
+
+# Never serve these over the web
+<FilesMatch "^(schema\.sql|composer\.(json|lock))$">
+  Require all denied
+</FilesMatch>
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteRule ^(includes|scripts|vendor)/ - [F,L]
+</IfModule>

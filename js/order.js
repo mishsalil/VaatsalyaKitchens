@@ -1,94 +1,49 @@
-/* Order page logic: renders the menu from js/menu.js, keeps a simple cart,
-   and sends the order as a WhatsApp message (no backend needed). */
+/* Order page: cart on server-rendered menu rows, validation,
+   and order placement via api/place-order.php. */
 
 (function () {
-  const menuRoot = document.getElementById("menu-root");
   const summaryList = document.getElementById("summary-list");
   const summaryTotal = document.getElementById("summary-total");
   const errorMsg = document.getElementById("order-error");
+  const placeBtn = document.getElementById("place-order");
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
 
-  // cart[itemName] = { qty, price, unit }
+  // cart[id] = { name, qty, price }
   const cart = {};
 
   const rupees = (n) => "₹" + n.toLocaleString("en-IN");
 
-  // Keep call links in sync with the number configured in js/menu.js
-  document.querySelectorAll("#nav-call, #call-instead").forEach((a) => {
-    a.href = "tel:+" + KITCHEN_WHATSAPP;
+  // Wire up +/- controls on each server-rendered menu row
+  document.querySelectorAll(".menu-item").forEach((row) => {
+    const id = row.dataset.id;
+    const name = row.dataset.name;
+    const price = parseFloat(row.dataset.price);
+    const qtyEl = row.querySelector(".qty");
+
+    function setQty(newQty) {
+      newQty = Math.max(0, Math.min(999, newQty));
+      qtyEl.textContent = String(newQty);
+      if (newQty === 0) {
+        delete cart[id];
+      } else {
+        cart[id] = { name, qty: newQty, price };
+      }
+      renderSummary();
+    }
+
+    row.querySelector(".qty-minus").addEventListener("click", () =>
+      setQty((cart[id]?.qty || 0) - 1)
+    );
+    row.querySelector(".qty-plus").addEventListener("click", () =>
+      setQty((cart[id]?.qty || 0) + 1)
+    );
   });
 
-  function renderMenu() {
-    MENU.forEach((cat) => {
-      const section = document.createElement("section");
-      section.className = "menu-category";
-
-      const heading = document.createElement("h3");
-      heading.textContent = cat.category;
-      section.appendChild(heading);
-
-      cat.items.forEach((item) => {
-        const row = document.createElement("div");
-        row.className = "menu-item";
-
-        const info = document.createElement("div");
-        info.className = "item-info";
-        info.innerHTML =
-          '<div class="item-name"></div><div class="item-price"></div>';
-        info.querySelector(".item-name").textContent = item.name;
-        info.querySelector(".item-price").textContent =
-          rupees(item.price) + " " + item.unit;
-        row.appendChild(info);
-
-        const control = document.createElement("div");
-        control.className = "qty-control";
-
-        const minus = document.createElement("button");
-        minus.type = "button";
-        minus.textContent = "−";
-        minus.setAttribute("aria-label", "Remove one " + item.name);
-
-        const qty = document.createElement("span");
-        qty.className = "qty";
-        qty.textContent = "0";
-        qty.setAttribute("aria-live", "polite");
-
-        const plus = document.createElement("button");
-        plus.type = "button";
-        plus.textContent = "+";
-        plus.setAttribute("aria-label", "Add one " + item.name);
-
-        function setQty(newQty) {
-          newQty = Math.max(0, newQty);
-          qty.textContent = String(newQty);
-          if (newQty === 0) {
-            delete cart[item.name];
-          } else {
-            cart[item.name] = { qty: newQty, price: item.price, unit: item.unit };
-          }
-          renderSummary();
-        }
-
-        minus.addEventListener("click", () =>
-          setQty((cart[item.name]?.qty || 0) - 1)
-        );
-        plus.addEventListener("click", () =>
-          setQty((cart[item.name]?.qty || 0) + 1)
-        );
-
-        control.append(minus, qty, plus);
-        row.appendChild(control);
-        section.appendChild(row);
-      });
-
-      menuRoot.appendChild(section);
-    });
-  }
-
   function renderSummary() {
-    const names = Object.keys(cart);
+    const ids = Object.keys(cart);
     summaryList.innerHTML = "";
 
-    if (names.length === 0) {
+    if (ids.length === 0) {
       const li = document.createElement("li");
       li.textContent = "Nothing selected yet — use the + buttons above.";
       summaryList.appendChild(li);
@@ -97,8 +52,8 @@
     }
 
     let total = 0;
-    names.forEach((name) => {
-      const { qty, price } = cart[name];
+    ids.forEach((id) => {
+      const { name, qty, price } = cart[id];
       total += qty * price;
       const li = document.createElement("li");
       const left = document.createElement("span");
@@ -111,34 +66,29 @@
     summaryTotal.textContent = rupees(total);
   }
 
-  function buildWhatsAppMessage() {
-    const name = document.getElementById("cust-name").value.trim();
-    const phone = document.getElementById("cust-phone").value.trim();
-    const occasion = document.getElementById("occasion").value;
-    const when = document.getElementById("when").value.trim();
-    const address = document.getElementById("address").value.trim();
-    const notes = document.getElementById("notes").value.trim();
+  // Saved-address radios: show the new-address fields only when "new" is chosen
+  const newAddressFields = document.getElementById("new-address-fields");
+  const addressChoices = document.querySelectorAll('input[name="address_choice"]');
+  addressChoices.forEach((radio) =>
+    radio.addEventListener("change", () => {
+      newAddressFields.hidden = radio.value !== "new" || !radio.checked;
+    })
+  );
 
-    const lines = [];
-    lines.push("Namaste Vaatsalya Kitchens! I would like to place an order:");
-    lines.push("");
-    let total = 0;
-    Object.keys(cart).forEach((itemName) => {
-      const { qty, price, unit } = cart[itemName];
-      total += qty * price;
-      lines.push("• " + itemName + " — " + qty + " (" + unit + ")");
-    });
-    lines.push("");
-    lines.push("Estimated total: ₹" + total.toLocaleString("en-IN"));
-    lines.push("");
-    lines.push("Name: " + name);
-    lines.push("Phone: " + phone);
-    if (occasion) lines.push("Occasion: " + occasion);
-    lines.push("Needed on: " + when);
-    lines.push(address ? "Delivery address: " + address : "Pickup order");
-    if (notes) lines.push("Notes: " + notes);
-
-    return lines.join("\n");
+  function selectedAddress() {
+    const checked = document.querySelector('input[name="address_choice"]:checked');
+    if (checked && checked.value === "pickup") {
+      return { address_id: null, address_text: "" };
+    }
+    if (checked && checked.value !== "new") {
+      return { address_id: parseInt(checked.value, 10), address_text: "" };
+    }
+    return {
+      address_id: null,
+      address_text: document.getElementById("address").value.trim(),
+      lat: document.getElementById("lat").value || null,
+      lng: document.getElementById("lng").value || null,
+    };
   }
 
   function validate() {
@@ -158,20 +108,43 @@
     return "";
   }
 
-  document.getElementById("send-whatsapp").addEventListener("click", () => {
+  placeBtn.addEventListener("click", async () => {
     const problem = validate();
     errorMsg.textContent = problem;
     if (problem) {
       errorMsg.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    const url =
-      "https://wa.me/" +
-      KITCHEN_WHATSAPP +
-      "?text=" +
-      encodeURIComponent(buildWhatsAppMessage());
-    window.open(url, "_blank");
-  });
 
-  renderMenu();
+    placeBtn.disabled = true;
+    placeBtn.textContent = "Placing your order…";
+
+    const body = {
+      items: Object.entries(cart).map(([id, it]) => ({ id: parseInt(id, 10), qty: it.qty })),
+      name: document.getElementById("cust-name").value.trim(),
+      phone: document.getElementById("cust-phone").value.trim(),
+      occasion: document.getElementById("occasion").value,
+      needed_on: document.getElementById("when").value.trim(),
+      notes: document.getElementById("notes").value.trim(),
+      ...selectedAddress(),
+    };
+
+    try {
+      const res = await fetch("api/place-order.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || "Something went wrong. Please try again or call us.");
+      }
+      window.location.href = "order-success.php?o=" + data.order_id;
+    } catch (err) {
+      errorMsg.textContent = err.message;
+      errorMsg.scrollIntoView({ behavior: "smooth", block: "center" });
+      placeBtn.disabled = false;
+      placeBtn.textContent = "🍽️ Place Order";
+    }
+  });
 })();
