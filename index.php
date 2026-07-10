@@ -12,7 +12,7 @@ page_header([
     <!-- Hero -->
     <section class="hero">
       <div class="container">
-        <img class="logo-large" src="assets/logo.svg" alt="Vaatsalya Kitchens logo — two decorated elephants beneath a mandala" />
+        <img class="logo-large" src="assets/logo.jpg" alt="Vaatsalya Kitchens logo — two decorated elephants beneath a mandala" />
         <h1><span class="devanagari" lang="hi">वात्सल्य</span> Kitchens</h1>
         <p class="tagline">Food made with the warmth of home — for your small parties, kitty gatherings and bulk orders. So simple, anyone from 12 to 70+ can order in minutes.</p>
         <div class="hero-actions">

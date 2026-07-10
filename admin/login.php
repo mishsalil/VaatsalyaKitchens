@@ -47,7 +47,7 @@ header('X-Robots-Tag: noindex, nofollow');
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
   <title>Admin Sign In — Vaatsalya Kitchens</title>
-  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml" />
+  <link rel="icon" href="../assets/icon-192.png" type="image/png" />
   <link rel="stylesheet" href="../css/style.css" />
   <link rel="stylesheet" href="../css/admin.css" />
 </head>

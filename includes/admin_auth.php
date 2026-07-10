@@ -61,7 +61,7 @@ function admin_header(string $title, string $active = ''): void
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="robots" content="noindex, nofollow" />
   <title><?= e($title) ?> — Admin · Vaatsalya Kitchens</title>
-  <link rel="icon" href="../assets/logo.svg" type="image/svg+xml" />
+  <link rel="icon" href="../assets/icon-192.png" type="image/png" />
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../css/style.css" />
   <link rel="stylesheet" href="../css/admin.css" />
@@ -70,7 +70,7 @@ function admin_header(string $title, string $active = ''): void
   <header class="site-header">
     <div class="container">
       <a class="brand" href="index.php">
-        <img class="brand-mark" src="../assets/logo.svg" alt="" />
+        <img class="brand-mark" src="../assets/logo.jpg" alt="" />
         <span class="brand-name">Admin Panel</span>
       </a>
       <nav class="main-nav" aria-label="Admin navigation">

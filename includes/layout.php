@@ -24,7 +24,7 @@ function page_header(array $opts = []): void
   <meta name="csrf-token" content="<?= csrf_token() ?>" />
   <meta name="vapid-key" content="<?= e(config()['vapid']['public_key']) ?>" />
   <meta name="theme-color" content="#4f0f0f" />
-  <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+  <link rel="icon" href="assets/icon-192.png" type="image/png" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -36,7 +36,7 @@ function page_header(array $opts = []): void
   <header class="site-header">
     <div class="container">
       <a class="brand" href="index.php">
-        <img class="brand-mark" src="assets/logo.svg" alt="" />
+        <img class="brand-mark" src="assets/logo.jpg" alt="" />
         <span class="brand-name">Vaatsalya Kitchens</span>
       </a>
       <nav class="main-nav" aria-label="Main navigation">

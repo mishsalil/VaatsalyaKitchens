@@ -74,6 +74,7 @@ a { color: var(--maroon); }
   background: var(--cream);
   border-radius: 8px;
   padding: 3px;
+  object-fit: contain;
 }
 
 .brand .brand-name {

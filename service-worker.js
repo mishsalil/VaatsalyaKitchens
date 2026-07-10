@@ -2,7 +2,7 @@
    static-asset cache so the shell loads fast on repeat visits. */
 
 const CACHE = "vk-static-v1";
-const STATIC_ASSETS = ["css/style.css", "assets/logo.svg", "assets/icon-192.png"];
+const STATIC_ASSETS = ["css/style.css", "assets/logo.jpg", "assets/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

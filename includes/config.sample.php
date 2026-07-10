@@ -16,8 +16,8 @@ return [
 
     // --- Kitchen contact ---
     // WhatsApp/phone in international format, digits only: 91XXXXXXXXXX
-    'kitchen_whatsapp'      => '919999999999',
-    'kitchen_phone_display' => '+91 99999 99999',
+    'kitchen_whatsapp'      => '919623836382',
+    'kitchen_phone_display' => '+91 96238 36382',
     'kitchen_email'         => 'msalil2810@gmail.com',
 
     // --- Web Push (run: php scripts/generate-vapid.php  and paste output) ---
