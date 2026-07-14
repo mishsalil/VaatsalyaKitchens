@@ -1,2 +1,5 @@
 includes/config.php
 .DS_Store
+
+# local curl/test cookie jars
+.test-cookies*.txt
