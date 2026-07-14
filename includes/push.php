@@ -37,7 +37,7 @@ function push_send(array $subscriptionRows, string $title, string $body, string 
     $payload = json_encode([
         'title' => $title,
         'body'  => $body,
-        'url'   => $url ?: ($cfg['base_url'] . '/my-account.php'),
+        'url'   => $url ?: ($cfg['base_url'] . '/account'),
         'icon'  => $cfg['base_url'] . '/assets/icon-192.png',
     ], JSON_UNESCAPED_UNICODE);
 

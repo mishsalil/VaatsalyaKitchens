@@ -1,12 +1,43 @@
-# Old static URLs → new PHP pages
-RedirectMatch 301 ^/index\.html$ /index.php
-RedirectMatch 301 ^/order\.html$ /order.php
+# =====================================================================
+# VaatsalyaKitchens — production Apache/cPanel config (post-cutover SPA).
+#
+# Deploy: run `npm run build` in web/, then copy the CONTENTS of web/dist/
+# (index.html, assets/, sw.js, manifest.webmanifest, favicon.svg) into this
+# web root, alongside api/ includes/. Also copy web/public/branding/ (uploaded
+# logos) so /branding/* resolves. The old server-rendered PHP customer pages
+# AND the old PHP admin (admin/*.php, css/) have both been removed — both the
+# customer storefront and the admin panel are now the React SPA served here,
+# with /api/* → api/index.php and /api/admin/* → the admin REST API.
+#
+# `php -S` (local dev) ignores this file — local prod-like serving uses
+# web/router.php instead. See web/router.php.
+# =====================================================================
 
-# Never serve these over the web
-<FilesMatch "^(schema\.sql|composer\.(json|lock))$">
+# Serve the SPA at "/" (index.html from dist) before any index.php.
+DirectoryIndex index.html index.php
+
+# Never serve secrets / build-only / server-only paths over the web.
+<FilesMatch "^(schema\.sql|composer\.(json|lock)|config\.php|\.env)$">
   Require all denied
 </FilesMatch>
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteRule ^(includes|scripts|vendor)/ - [F,L]
+
+  # Block traversal into server-only directories.
+  RewriteRule ^(includes|scripts|vendor|web|node_modules|database|api/routes|api/lib)/ - [F,L]
+
+  # Customer REST API -> front controller (REQUEST_URI is preserved so the
+  # controller parses /api/<resource>/<action> from it).
+  RewriteRule ^api/?$ api/index.php [L]
+  RewriteCond %{REQUEST_URI} !^/api/index\.php
+  RewriteRule ^api/ api/index.php [L]
+
+  # SPA client-side routing: any non-file, non-directory path falls back to
+  # the built index.html. This covers storefront routes AND /admin/* SPA routes
+  # (the old admin/*.php are gone). Real files (assets, sw.js, branding/) and
+  # real directories skip this rule and are served directly.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
 </IfModule>

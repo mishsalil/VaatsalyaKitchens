@@ -1,0 +1,56 @@
+<?php
+/* POST /api/auth/login  {phone, pin}  — PIN login (rate-limited).
+   POST /api/auth/logout                 — end the customer session. */
+function route($method, $action, $parts): void
+{
+    if ($action === 'login') {
+        if ($method !== 'POST') {
+            Response::error('Method not allowed', 405);
+        }
+        customer_session_start();
+        require_csrf_api($_POST);
+
+        $phone = normalize_phone((string)($_POST['phone'] ?? ''));
+        $pin   = trim((string)($_POST['pin'] ?? ''));
+
+        if ($phone === null) {
+            Response::error('Please write your 10-digit phone number.');
+        }
+        if (!preg_match('/^\d{4}$/', $pin)) {
+            Response::error('Please write your 4-digit PIN.');
+        }
+        if (too_many_attempts('pin:' . $phone)) {
+            Response::error('Too many tries. Please wait 15 minutes and try again, or call us.', 429);
+        }
+
+        $customer = find_customer_by_phone($phone);
+        if ($customer && $customer['pin_hash'] && password_verify($pin, $customer['pin_hash'])) {
+            clear_attempts('pin:' . $phone);
+            login_customer((int)$customer['id']);
+            Response::json(['user' => [
+                'id'      => (int)$customer['id'],
+                'name'    => $customer['name'],
+                'phone'   => $customer['phone'],
+                'has_pin' => true,
+            ]]);
+        }
+
+        record_attempt('pin:' . $phone);
+        if ($customer && !$customer['pin_hash']) {
+            Response::error('This number has no PIN yet. Just place an order — this device will remember you, and you can set a PIN afterwards.');
+        }
+        Response::error('That phone number and PIN do not match. Please try again.', 401);
+    }
+
+    if ($action === 'logout') {
+        if ($method !== 'POST') {
+            Response::error('Method not allowed', 405);
+        }
+        customer_session_start();
+        require_csrf_api($_POST);
+        logout_customer();
+        Response::success('Signed out');
+    }
+
+    Response::error('Method not allowed', 405);
+}

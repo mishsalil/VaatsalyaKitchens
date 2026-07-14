@@ -29,4 +29,8 @@ return [
 
     // Site base URL, no trailing slash (used in push notification links)
     'base_url' => 'https://www.example.com',
+
+    // Default branch id (multi-branch readiness). Storefront treats this as
+    // the current branch; branches live in the `branches` table.
+    'default_branch_id' => 1,
 ];

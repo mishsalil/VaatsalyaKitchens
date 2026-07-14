@@ -1,5 +1,12 @@
 <?php
-/* Admin authentication + shared admin page chrome. */
+/* Admin authentication for the admin REST API (/api/admin/*).
+
+   The old server-rendered admin panel (admin/*.php + admin_header/admin_footer
+   page chrome + the require_admin() redirect variant) was removed in the
+   cutover to the React admin SPA. What remains here is the session/auth core
+   reused by the API: a separate VKADMIN session, current_admin(), and the
+   require_admin_api() JSON-401 guard. Customer auth is unaffected (separate
+   PHPSESSID session). */
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers.php';
@@ -32,64 +39,13 @@ function current_admin(): ?array
     return $stmt->fetch() ?: null;
 }
 
-/** Call at the top of every admin page except login.php. */
-function require_admin(): array
+/** JSON-API guard: 401 envelope instead of a redirect. For /api/admin/*. */
+function require_admin_api(): array
 {
     header('X-Robots-Tag: noindex, nofollow');
     $admin = current_admin();
     if (!$admin) {
-        header('Location: login.php');
-        exit;
+        json_error('Please sign in as admin.', 401);
     }
     return $admin;
-}
-
-function admin_header(string $title, string $active = ''): void
-{
-    $items = [
-        'index.php'     => '📊 Dashboard',
-        'orders.php'    => '🧾 Orders',
-        'menu.php'      => '🍛 Menu',
-        'customers.php' => '👥 Customers',
-        'broadcast.php' => '🔔 Broadcast',
-        'settings.php'  => '⚙️ Settings',
-    ];
-    ?><!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="robots" content="noindex, nofollow" />
-  <title><?= e($title) ?> — Admin · Vaatsalya Kitchens</title>
-  <link rel="icon" href="../assets/icon-192.png" type="image/png" />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../css/style.css" />
-  <link rel="stylesheet" href="../css/admin.css" />
-</head>
-<body class="admin-body">
-  <header class="site-header">
-    <div class="container">
-      <a class="brand" href="index.php">
-        <img class="brand-mark" src="../assets/logo.jpg" alt="" />
-        <span class="brand-name">Admin Panel</span>
-      </a>
-      <nav class="main-nav" aria-label="Admin navigation">
-        <?php foreach ($items as $href => $label): ?>
-          <a href="<?= $href ?>" <?= $href === $active ? 'class="active"' : '' ?>><?= $label ?></a>
-        <?php endforeach; ?>
-        <a href="login.php?action=logout">Sign Out</a>
-      </nav>
-    </div>
-  </header>
-  <main class="container admin-main">
-<?php
-}
-
-function admin_footer(): void
-{
-    ?>
-  </main>
-</body>
-</html>
-<?php
 }
