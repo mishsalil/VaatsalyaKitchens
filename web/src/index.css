@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    min-height: 100dvh;
+  }
+  /* Poppins is the primary typeface (modern food-app idiom); headings inherit it.
+     Cormorant serif is available via `.font-serif` where a display flourish is wanted. */
+  .font-serif {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+  /* Proper Devanagari rendering for the वात्सल्य wordmark and Hindi terms. */
+  .font-devanagari, [lang='hi'] {
+    font-family: 'Noto Sans Devanagari', 'Cormorant Garamond', serif;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-3xl px-4 sm:px-6;
+  }
+  .container-wide {
+    @apply mx-auto w-full max-w-5xl px-4 sm:px-6;
+  }
+  .card-soft {
+    @apply rounded-2xl border border-cream-200 bg-white shadow-card;
+  }
+  .link-quiet {
+    @apply text-brand-700 underline-offset-2 hover:underline;
+  }
+  /* Pill chip (categories, quick-time, filters). */
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3.5 py-1.5 text-sm font-medium text-brand-700 transition-colors;
+  }
+  .chip-active {
+    @apply border-brand-900 bg-brand-900 text-cream-50;
+  }
+  /* Hide scrollbars on horizontal-scroll chip rows (Swiggy-style category strips). */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Respect the iOS home-indicator / status bar for the sticky cart + nav bars. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0);
+}

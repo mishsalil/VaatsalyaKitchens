@@ -1,0 +1,23 @@
+{
+  "name": "Vaatsalya Kitchens",
+  "short_name": "Vaatsalya",
+  "description": "Home-style food for parties, kitties and bulk orders.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f2e7",
+  "theme_color": "#4f0f0f",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    { "name": "Order Now", "url": "/order", "short_name": "Order" },
+    { "name": "My Account", "url": "/account", "short_name": "Account" }
+  ]
+}
