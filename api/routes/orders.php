@@ -4,6 +4,22 @@
    GET  /api/orders/show/{id}     — one owned order + items. */
 require_once __DIR__ . '/../../includes/settings.php';
 require_once __DIR__ . '/../../includes/gst.php';
+require_once __DIR__ . '/../../includes/order_lines.php';
+require_once __DIR__ . '/../../includes/order_events.php';
+
+/* How long a customer may cancel their own order unaided. The countdown shown
+   on the storefront is only UX — this constant is the authority, checked
+   against orders.created_at on the server, so a tampered clock changes nothing. */
+const CUSTOMER_CANCEL_SECONDS = 300;
+
+/** Seconds of self-cancel left on an order, 0 once the window or status closes. */
+function cancel_seconds_left(string $status, int $ageSeconds): int
+{
+    if (!in_array($status, ['new', 'confirmed'], true)) {
+        return 0;
+    }
+    return max(0, CUSTOMER_CANCEL_SECONDS - $ageSeconds);
+}
 
 function route($method, $action, $parts): void
 {
@@ -82,6 +98,7 @@ function route($method, $action, $parts): void
 
             // Add-ons: optional, multi-select; each must belong to the item & be available.
             $addonNames = [];
+            $chosenAddonIds = [];
             $addonIds = $it['addon_ids'] ?? [];
             if (is_array($addonIds) && $addonIds) {
                 $addonStmt->execute([$id]);
@@ -94,6 +111,7 @@ function route($method, $action, $parts): void
                     if (isset($valid[$aid])) {
                         $unit += (float)$valid[$aid]['price'];
                         $addonNames[] = $valid[$aid]['name'];
+                        $chosenAddonIds[] = $aid;
                     }
                 }
             }
@@ -105,6 +123,11 @@ function route($method, $action, $parts): void
                 'qty' => $qty,
                 'variant_name' => $variantName,
                 'addons_text' => $addonNames ? implode(', ', $addonNames) : null,
+                // Ids behind the snapshot, so a later edit rebuilds this line
+                // exactly instead of matching on name (migration_007).
+                'menu_item_id' => $id,
+                'variant_id'   => $variantId ?: null,
+                'addon_ids'    => $chosenAddonIds ? implode(',', $chosenAddonIds) : null,
             ];
             $total += $unit * $qty;
         }
@@ -159,16 +182,10 @@ function route($method, $action, $parts): void
                         $gst['total'], $gst['subtotal'], $gst['cgst'], $gst['sgst'], $gst['rate'], $branchId]);
             $orderId = (int)$pdo->lastInsertId();
 
-            $lineStmt = $pdo->prepare(
-                'INSERT INTO order_items (order_id, item_name, variant_name, addons_text, unit, price, qty)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
-            );
-            foreach ($lines as $line) {
-                $lineStmt->execute([
-                    $orderId, $line['name'], $line['variant_name'], $line['addons_text'],
-                    $line['unit'], $line['price'], $line['qty'],
-                ]);
-            }
+            insert_order_lines($pdo, $orderId, $lines);
+            log_order_event($orderId, 'customer', $customerId, $name, 'created', [
+                'total' => $gst['total'], 'items' => count($lines), 'channel' => 'storefront',
+            ]);
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
@@ -190,7 +207,8 @@ function route($method, $action, $parts): void
             'SELECT o.id, o.occasion, o.needed_on, o.address_text, o.status,
                     o.total_estimate, o.subtotal, o.cgst, o.sgst, o.gst_rate,
                     o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
-                    o.created_at, b.name AS branch_name
+                    o.created_at, b.name AS branch_name,
+                    TIMESTAMPDIFF(SECOND, o.created_at, NOW()) AS age_seconds
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id
               WHERE o.customer_id = ?
@@ -212,6 +230,8 @@ function route($method, $action, $parts): void
             $o['discount_amount']  = (float)$o['discount_amount'];
             $o['delivery_charge']  = (float)$o['delivery_charge'];
             $o['is_complimentary'] = (bool)$o['is_complimentary'];
+            $o['cancel_seconds_left'] = cancel_seconds_left($o['status'], (int)$o['age_seconds']);
+            unset($o['age_seconds']);
             foreach ($o['items'] as &$it) {
                 $it['price'] = (float)$it['price'];
             }
@@ -219,6 +239,44 @@ function route($method, $action, $parts): void
         unset($o, $it);
 
         Response::json(['orders' => $orders]);
+    }
+
+    /* --- cancel (customer, inside the countdown) ---
+       Allowed only while the kitchen has not started cooking AND within
+       CUSTOMER_CANCEL_SECONDS of placing. After that the customer calls — the
+       kitchen may already have committed food to the order. */
+    if ($action === 'cancel' && $method === 'POST') {
+        customer_session_start();
+        require_csrf_api($_POST);
+        $customer = current_customer();
+        if (!$customer) {
+            Response::error('Please sign in first.', 401);
+        }
+        $id = (int)($parts[2] ?? 0);
+        $stmt = db()->prepare(
+            'SELECT id, status, created_at,
+                    TIMESTAMPDIFF(SECOND, created_at, NOW()) AS age_seconds
+               FROM orders WHERE id = ? AND customer_id = ?'
+        );
+        $stmt->execute([$id, $customer['id']]);
+        $order = $stmt->fetch();
+        if (!$order) {
+            Response::error('Order not found.', 404);
+        }
+        if ($order['status'] === 'cancelled') {
+            Response::error('This order is already cancelled.');
+        }
+        if (!in_array($order['status'], ['new', 'confirmed'], true)) {
+            Response::error('We have already started preparing this order. Please call us and we will help.');
+        }
+        if ((int)$order['age_seconds'] > CUSTOMER_CANCEL_SECONDS) {
+            Response::error('The cancellation window has passed. Please call us and we will help.');
+        }
+        db()->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute(['cancelled', $id]);
+        log_order_event($id, 'customer', (int)$customer['id'], $customer['name'], 'cancelled', [
+            'from' => $order['status'], 'within_seconds' => (int)$order['age_seconds'],
+        ]);
+        Response::json(['ok' => true, 'status' => 'cancelled']);
     }
 
     // --- show ---
@@ -233,7 +291,8 @@ function route($method, $action, $parts): void
                     o.lat, o.lng, o.notes, o.status, o.total_estimate,
                     o.subtotal, o.cgst, o.sgst, o.gst_rate,
                     o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
-                    o.created_at, b.name AS branch_name
+                    o.created_at, b.name AS branch_name,
+                    TIMESTAMPDIFF(SECOND, o.created_at, NOW()) AS age_seconds
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id
               WHERE o.id = ? AND o.customer_id = ?'
@@ -259,6 +318,8 @@ function route($method, $action, $parts): void
         $order['discount_amount']  = (float)$order['discount_amount'];
         $order['delivery_charge']  = (float)$order['delivery_charge'];
         $order['is_complimentary'] = (bool)$order['is_complimentary'];
+        $order['cancel_seconds_left'] = cancel_seconds_left($order['status'], (int)$order['age_seconds']);
+        unset($order['age_seconds']);
         $order['items'] = $items;
         Response::json(['order' => $order]);
     }

@@ -20,6 +20,8 @@ export const ordersApi = {
   create: (body: object) => api.post('orders/create', body) as Promise<{ order_id: number }>,
   list: () => api.get('orders') as Promise<{ orders: OrderListItem[] }>,
   show: (id: number) => api.get(`orders/show/${id}`) as Promise<{ order: Order }>,
+  /** Self-cancel, allowed only inside the server's window. */
+  cancel: (id: number) => api.post(`orders/cancel/${id}`, {}) as Promise<{ ok: true; status: 'cancelled' }>,
 };
 
 export const addressesApi = {

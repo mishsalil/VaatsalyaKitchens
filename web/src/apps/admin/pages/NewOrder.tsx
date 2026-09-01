@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Search, Minus, X, Check, Printer, UserCheck, Gift, MessageCircle } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { useFetch } from '../../shared/hooks/useFetch';
@@ -46,6 +46,13 @@ interface CartEntry {
 }
 
 export function AdminNewOrder() {
+  // Same screen serves /admin/new-order and /admin/orders/:id/edit — an edit is
+  // the same decisions as a new order, so a second form would only drift.
+  const { id: editIdParam } = useParams();
+  const editId = editIdParam ? Number(editIdParam) : null;
+  const [loadingOrder, setLoadingOrder] = useState(editId !== null);
+  const [loadWarning, setLoadWarning] = useState<string | null>(null);
+
   const { settings } = useAdminAuth();
   // The PUBLIC menu endpoint, not the admin one: /api/admin/menu requires the
   // `menu` cap, which staff — the counter reps this screen exists for — do not
@@ -56,6 +63,10 @@ export function AdminNewOrder() {
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [whenLocal, setWhenLocal] = useState('');
+  // needed_on is free text on the order ("Sat 20 Jul, 1:00 PM"), which a
+  // datetime-local input cannot represent — so edit mode keeps it as text
+  // rather than forcing the rep to re-pick a time that is already correct.
+  const [whenText, setWhenText] = useState('');
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
   const [known, setKnown] = useState<string | null>(null);
@@ -110,8 +121,74 @@ export function AdminNewOrder() {
   const q = query.trim().toLowerCase();
   const visible = q ? tiles.filter((t) => t.label.toLowerCase().includes(q)) : tiles;
 
+  /* Edit mode: hydrate the form from the order once the menu is in.
+     Lines are rebuilt from the menu ids stored on each line, so the cart is
+     exactly what was ordered. Orders placed before migration_007 have no ids —
+     those fall back to matching on name (as ReorderButton does) and anything
+     still unresolvable is reported rather than silently dropped, because a
+     missing line would be re-saved as a smaller bill. */
+  useEffect(() => {
+    if (editId === null || !menu.data) return;
+    let cancelled = false;
+    adminOrdersApi
+      .show(editId)
+      .then(({ order }) => {
+        if (cancelled) return;
+        setName(order.name);
+        setPhone(order.phone);
+        setWhenText(order.needed_on);
+        setAddress(order.address_text ?? '');
+        setNotes(order.notes ?? '');
+        setDiscountPct(order.discount_pct ? String(order.discount_pct) : '');
+        setDeliveryCharge(order.delivery_charge ? String(order.delivery_charge) : '');
+        setComplimentary(order.is_complimentary);
+
+        const next: Record<string, CartEntry> = {};
+        let unresolved = 0;
+        for (const line of order.items) {
+          let itemId = line.menu_item_id;
+          let variantId = line.variant_id ?? 0;
+          let addonIds = line.addon_ids ?? [];
+          if (!itemId) {
+            const match = (menu.data?.items ?? []).find((m) => m.name === line.item_name);
+            if (!match) { unresolved++; continue; }
+            itemId = match.id;
+            variantId = line.variant_name
+              ? match.variants.find((v) => v.name === line.variant_name)?.id ?? 0
+              : 0;
+            const names = line.addons_text ? line.addons_text.split(',').map((s) => s.trim()) : [];
+            addonIds = match.addons.filter((a) => names.includes(a.name)).map((a) => a.id);
+          }
+          const item = itemById.get(itemId);
+          if (!item) { unresolved++; continue; }
+          const key = cartKey(itemId, variantId || undefined, addonIds);
+          next[key] = {
+            itemId,
+            variantId,
+            variantName: item.variants.find((v) => v.id === variantId)?.name ?? null,
+            addonIds,
+            qty: line.qty,
+          };
+        }
+        setCart(next);
+        if (unresolved > 0) {
+          setLoadWarning(
+            `${unresolved} line(s) from this order are no longer on the menu and could not be loaded. ` +
+            'Re-add them before saving, or the total will drop.',
+          );
+        }
+      })
+      .catch((e) => setLoadWarning((e as Error).message))
+      .finally(() => { if (!cancelled) setLoadingOrder(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, menu.data]);
+
   // Known-customer lookup: fires once the phone is a valid 10-digit number.
   useEffect(() => {
+    // In edit mode the order already carries its customer; the lookup would
+    // only fight the values we just loaded.
+    if (editId !== null) return;
     const normalized = normalizePhone(phone);
     if (!normalized) {
       setKnown(null);
@@ -237,11 +314,13 @@ export function AdminNewOrder() {
     }
   };
 
+  const neededOn = editId !== null ? whenText.trim() : formatNeededOn(whenLocal);
+
   const save = async () => {
     setError(null);
     if (!name.trim()) return setError('Customer name is required.');
     if (!normalizePhone(phone)) return setError('Enter a valid 10-digit phone number.');
-    if (!whenLocal) return setError('Set when the food is needed.');
+    if (!neededOn) return setError('Set when the food is needed.');
     if (lines.length === 0) return setError('Add at least one dish.');
 
     const items: AdminNewOrderLine[] = lines.map(({ entry }) => ({
@@ -251,19 +330,23 @@ export function AdminNewOrder() {
       ...(entry.addonIds.length ? { addon_ids: entry.addonIds } : {}),
     }));
 
+    const payload = {
+      name: name.trim(),
+      phone: normalizePhone(phone) as string,
+      needed_on: neededOn,
+      address_text: address.trim(),
+      notes: notes.trim(),
+      items,
+      discount_pct: Number(discountPct) || 0,
+      delivery_charge: Number(deliveryCharge) || 0,
+      is_complimentary: complimentary,
+    };
+
     setSaving(true);
     try {
-      const res = await adminOrdersApi.create({
-        name: name.trim(),
-        phone: normalizePhone(phone) as string,
-        needed_on: formatNeededOn(whenLocal),
-        address_text: address.trim(),
-        notes: notes.trim(),
-        items,
-        discount_pct: Number(discountPct) || 0,
-        delivery_charge: Number(deliveryCharge) || 0,
-        is_complimentary: complimentary,
-      });
+      const res = editId !== null
+        ? await adminOrdersApi.update(editId, payload)
+        : await adminOrdersApi.create(payload);
       setPlaced({ id: res.order_id, total: res.total, complimentary: res.complimentary });
     } catch (e) {
       setError((e as Error).message);
@@ -278,7 +361,9 @@ export function AdminNewOrder() {
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
           <Check className="h-7 w-7" />
         </div>
-        <h1 className="mt-4 text-xl font-bold text-brand-900">Order #{placed.id} saved</h1>
+        <h1 className="mt-4 text-xl font-bold text-brand-900">
+          Order #{placed.id} {editId !== null ? 'updated' : 'saved'}
+        </h1>
         <p className="mt-1 text-brand-600">
           {placed.complimentary ? 'Complimentary — nothing to collect' : `${rupees(placed.total)} · confirmed`}
         </p>
@@ -289,7 +374,9 @@ export function AdminNewOrder() {
           <Button variant="whatsapp" onClick={sendClaimLink} disabled={claimBusy}>
             <MessageCircle className="h-4 w-4" /> {claimBusy ? 'Preparing…' : 'Send tracking link'}
           </Button>
-          <Button onClick={reset}>New order</Button>
+          {editId !== null
+            ? <Link to="/admin/orders"><Button>Back to orders</Button></Link>
+            : <Button onClick={reset}>New order</Button>}
         </div>
         {claimNote && <p className="mt-3 text-sm text-brand-500">{claimNote}</p>}
       </div>
@@ -301,8 +388,20 @@ export function AdminNewOrder() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-brand-900">New order</h1>
-      <p className="mt-1 text-sm text-brand-500">Take an order at the counter — tap a dish to add it.</p>
+      <h1 className="text-xl font-bold text-brand-900">
+        {editId !== null ? `Edit order #${editId}` : 'New order'}
+      </h1>
+      <p className="mt-1 text-sm text-brand-500">
+        {editId !== null
+          ? 'Change anything — the bill is recalculated and the edit is recorded.'
+          : 'Take an order at the counter — tap a dish to add it.'}
+      </p>
+      {loadingOrder && <p className="mt-3 text-sm text-brand-500">Loading order…</p>}
+      {loadWarning && (
+        <p className="mt-3 rounded-xl border border-gold-200 bg-gold-50 px-4 py-3 text-sm text-gold-800">
+          {loadWarning}
+        </p>
+      )}
 
       {/* Customer — one compact block, never a separate step. */}
       <div className="card-soft mt-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -327,12 +426,21 @@ export function AdminNewOrder() {
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-brand-600">Needed on *</span>
-          <input
-            type="datetime-local"
-            value={whenLocal}
-            onChange={(e) => setWhenLocal(e.target.value)}
-            className={`mt-1 ${inputClass}`}
-          />
+          {editId !== null ? (
+            <input
+              value={whenText}
+              onChange={(e) => setWhenText(e.target.value)}
+              placeholder="e.g. Sat 20 Jul, 1:00 PM"
+              className={`mt-1 ${inputClass}`}
+            />
+          ) : (
+            <input
+              type="datetime-local"
+              value={whenLocal}
+              onChange={(e) => setWhenLocal(e.target.value)}
+              className={`mt-1 ${inputClass}`}
+            />
+          )}
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-brand-600">Address (blank = pickup)</span>

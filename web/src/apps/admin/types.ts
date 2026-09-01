@@ -175,13 +175,30 @@ export interface AdminSettingsResponse {
   vapid_configured: boolean;
 }
 
+/** An order line, with the menu ids behind the snapshot (null on pre-007 orders). */
+export interface AdminOrderItem extends OrderItem {
+  menu_item_id: number | null;
+  variant_id: number | null;
+  addon_ids: number[];
+}
+
+/** One entry in an order's audit trail (migration_007). */
+export interface AdminOrderEvent {
+  actor_type: 'admin' | 'customer' | 'system';
+  actor_label: string;
+  action: 'created' | 'edited' | 'status' | 'cancelled';
+  detail: Record<string, unknown> | null;
+  created_at: string;
+}
+
 /** Full order detail for the drawer. */
 export interface AdminOrder extends AdminOrderListItem {
   lat: number | null;
   lng: number | null;
   notes: string | null;
-  items: OrderItem[];
+  items: AdminOrderItem[];
   customer: AdminCustomer | null;
+  events: AdminOrderEvent[];
 }
 
 /** A team member row (never includes password_hash). */

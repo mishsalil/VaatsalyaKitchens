@@ -166,6 +166,12 @@ export interface OrderListItem {
   discount_amount: number;
   delivery_charge: number;
   is_complimentary: boolean;
+  /**
+   * Seconds left in which the customer may cancel this order themselves.
+   * 0 once the window has passed or the kitchen has moved it past Confirmed.
+   * The server is the authority — this only drives the countdown UI.
+   */
+  cancel_seconds_left: number;
   created_at: string;
   branch_name: string | null;
   items: OrderItem[];

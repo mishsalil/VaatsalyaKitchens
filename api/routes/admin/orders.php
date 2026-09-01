@@ -8,6 +8,85 @@
 require_once __DIR__ . '/../../../includes/push.php';
 require_once __DIR__ . '/../../../includes/settings.php';
 require_once __DIR__ . '/../../../includes/gst.php';
+require_once __DIR__ . '/../../../includes/order_lines.php';
+require_once __DIR__ . '/../../../includes/order_events.php';
+
+/* Resolve posted cart lines into priced order lines. Prices, variant deltas and
+   add-on prices are ALWAYS re-read from the DB — the client sends ids and
+   quantities only, never money. Shared by create and update so a counter edit
+   is priced by exactly the same rules as the original order.
+   Returns [$lines, $subtotal]; Response::error()s on an unchosen variant. */
+function resolve_order_lines(PDO $pdo, array $items): array
+{
+    $lines = [];
+    $total = 0.0;
+    $itemStmt    = $pdo->prepare('SELECT name, price, unit FROM menu_items WHERE id = ? AND available = 1');
+    $variantStmt = $pdo->prepare('SELECT id, name, price_delta FROM menu_item_variants WHERE item_id = ? ORDER BY sort_order, id');
+    $addonStmt   = $pdo->prepare('SELECT id, name, price FROM menu_item_addons WHERE item_id = ? AND available = 1');
+
+    foreach ($items as $it) {
+        $id  = (int)($it['id'] ?? 0);
+        $qty = (int)($it['qty'] ?? 0);
+        if ($id <= 0 || $qty <= 0 || $qty > 999) {
+            continue;
+        }
+        $itemStmt->execute([$id]);
+        $menuItem = $itemStmt->fetch();
+        if (!$menuItem) {
+            continue;
+        }
+        $unit = (float)$menuItem['price'];
+
+        $variantStmt->execute([$id]);
+        $itemVariants = $variantStmt->fetchAll();
+        $variantId   = (int)($it['variant_id'] ?? 0);
+        $variantName = null;
+        if ($itemVariants) {
+            $chosen = null;
+            foreach ($itemVariants as $v) {
+                if ((int)$v['id'] === $variantId) { $chosen = $v; break; }
+            }
+            if (!$chosen) {
+                Response::error('Please choose a size for ' . $menuItem['name'] . '.');
+            }
+            $unit += (float)$chosen['price_delta'];
+            $variantName = $chosen['name'];
+        }
+
+        $addonNames = [];
+        $chosenAddonIds = [];
+        $addonIds = $it['addon_ids'] ?? [];
+        if (is_array($addonIds) && $addonIds) {
+            $addonStmt->execute([$id]);
+            $valid = [];
+            foreach ($addonStmt->fetchAll() as $a) {
+                $valid[(int)$a['id']] = $a;
+            }
+            foreach ($addonIds as $aid) {
+                $aid = (int)$aid;
+                if (isset($valid[$aid])) {
+                    $unit += (float)$valid[$aid]['price'];
+                    $addonNames[] = $valid[$aid]['name'];
+                    $chosenAddonIds[] = $aid;
+                }
+            }
+        }
+
+        $lines[] = [
+            'name'         => $menuItem['name'],
+            'unit'         => $menuItem['unit'],
+            'price'        => $unit,
+            'qty'          => $qty,
+            'variant_name' => $variantName,
+            'addons_text'  => $addonNames ? implode(', ', $addonNames) : null,
+            'menu_item_id' => $id,
+            'variant_id'   => $variantId ?: null,
+            'addon_ids'    => $chosenAddonIds ? implode(',', $chosenAddonIds) : null,
+        ];
+        $total += $unit * $qty;
+    }
+    return [$lines, $total];
+}
 
 function route($method, $action, $parts): void
 {
@@ -113,11 +192,20 @@ function route($method, $action, $parts): void
         if (!$order) {
             Response::error('Order not found.', 404);
         }
-        $itemStmt = db()->prepare('SELECT item_name, variant_name, addons_text, qty, unit, price FROM order_items WHERE order_id = ? ORDER BY id');
+        // menu ids come back too, so the edit screen rebuilds each line exactly
+        // rather than matching on name (migration_007; NULL on pre-007 orders).
+        $itemStmt = db()->prepare(
+            'SELECT menu_item_id, variant_id, addon_ids, item_name, variant_name, addons_text, qty, unit, price
+               FROM order_items WHERE order_id = ? ORDER BY id'
+        );
         $itemStmt->execute([$id]);
         $items = $itemStmt->fetchAll();
         foreach ($items as &$it) {
             $it['price'] = (float)$it['price'];
+            $it['qty']   = (int)$it['qty'];
+            $it['menu_item_id'] = $it['menu_item_id'] !== null ? (int)$it['menu_item_id'] : null;
+            $it['variant_id']   = $it['variant_id'] !== null ? (int)$it['variant_id'] : null;
+            $it['addon_ids']    = $it['addon_ids'] ? array_map('intval', explode(',', $it['addon_ids'])) : [];
         }
         unset($it);
         $order['total_estimate'] = (float)$order['total_estimate'];
@@ -148,6 +236,7 @@ function route($method, $action, $parts): void
         }
         $order['items'] = $items;
         $order['customer'] = $customer;
+        $order['events'] = order_events($id);
         Response::json(['order' => $order]);
     }
 
@@ -242,67 +331,7 @@ function route($method, $action, $parts): void
         $isComplimentary = !empty($_POST['is_complimentary']);
 
         $pdo = db();
-        $lines = [];
-        $total = 0.0;
-        $itemStmt    = $pdo->prepare('SELECT name, price, unit FROM menu_items WHERE id = ? AND available = 1');
-        $variantStmt = $pdo->prepare('SELECT id, name, price_delta FROM menu_item_variants WHERE item_id = ? ORDER BY sort_order, id');
-        $addonStmt   = $pdo->prepare('SELECT id, name, price FROM menu_item_addons WHERE item_id = ? AND available = 1');
-        foreach ($items as $it) {
-            $id  = (int)($it['id'] ?? 0);
-            $qty = (int)($it['qty'] ?? 0);
-            if ($id <= 0 || $qty <= 0 || $qty > 999) {
-                continue;
-            }
-            $itemStmt->execute([$id]);
-            $menuItem = $itemStmt->fetch();
-            if (!$menuItem) {
-                continue;
-            }
-            $unit = (float)$menuItem['price'];
-
-            $variantStmt->execute([$id]);
-            $itemVariants = $variantStmt->fetchAll();
-            $variantId = (int)($it['variant_id'] ?? 0);
-            $variantName = null;
-            if ($itemVariants) {
-                $chosen = null;
-                foreach ($itemVariants as $v) {
-                    if ((int)$v['id'] === $variantId) { $chosen = $v; break; }
-                }
-                if (!$chosen) {
-                    Response::error('Please choose a size for ' . $menuItem['name'] . '.');
-                }
-                $unit += (float)$chosen['price_delta'];
-                $variantName = $chosen['name'];
-            }
-
-            $addonNames = [];
-            $addonIds = $it['addon_ids'] ?? [];
-            if (is_array($addonIds) && $addonIds) {
-                $addonStmt->execute([$id]);
-                $valid = [];
-                foreach ($addonStmt->fetchAll() as $a) {
-                    $valid[(int)$a['id']] = $a;
-                }
-                foreach ($addonIds as $aid) {
-                    $aid = (int)$aid;
-                    if (isset($valid[$aid])) {
-                        $unit += (float)$valid[$aid]['price'];
-                        $addonNames[] = $valid[$aid]['name'];
-                    }
-                }
-            }
-
-            $lines[] = [
-                'name'         => $menuItem['name'],
-                'unit'         => $menuItem['unit'],
-                'price'        => $unit,
-                'qty'          => $qty,
-                'variant_name' => $variantName,
-                'addons_text'  => $addonNames ? implode(', ', $addonNames) : null,
-            ];
-            $total += $unit * $qty;
-        }
+        [$lines, $total] = resolve_order_lines($pdo, $items);
         if (!$lines) {
             Response::error('Please add at least one dish.');
         }
@@ -347,16 +376,10 @@ function route($method, $action, $parts): void
                         $branchId, 'confirmed']);
             $orderId = (int)$pdo->lastInsertId();
 
-            $lineStmt = $pdo->prepare(
-                'INSERT INTO order_items (order_id, item_name, variant_name, addons_text, unit, price, qty)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)'
-            );
-            foreach ($lines as $line) {
-                $lineStmt->execute([
-                    $orderId, $line['name'], $line['variant_name'], $line['addons_text'],
-                    $line['unit'], $line['price'], $line['qty'],
-                ]);
-            }
+            insert_order_lines($pdo, $orderId, $lines);
+            log_order_event($orderId, 'admin', (int)$admin['id'], (string)$admin['username'], 'created', [
+                'total' => $bill['total'], 'items' => count($lines), 'channel' => 'counter',
+            ]);
             $pdo->commit();
         } catch (Throwable $e) {
             $pdo->rollBack();
@@ -367,6 +390,111 @@ function route($method, $action, $parts): void
         Response::json([
             'order_id'      => $orderId,
             'total'         => $bill['total'],
+            'complimentary' => $bill['complimentary'],
+        ]);
+    }
+
+    /* --- edit an existing order (cap: new_order) ---
+       Everything a counter order carries: contact, delivery, notes, the dishes
+       themselves and the billing adjustments. Prices are re-resolved from the
+       menu through the same helper `create` uses, so an edited bill is priced by
+       identical rules, and the GST breakdown is re-snapshotted onto the order.
+
+       Terminal orders are refused. `delivered` is a settled GST invoice and
+       `cancelled` is void — silently rewriting either is almost always a
+       mistake, and neither is what "edit the order" means at a counter. */
+    if ($action === 'update' && $method === 'POST') {
+        require_admin_cap('new_order');
+        require_csrf_api($_POST);
+        $id = (int)($parts[3] ?? 0);
+
+        $pdo = db();
+        $stmt = $pdo->prepare('SELECT * FROM orders WHERE id = ?');
+        $stmt->execute([$id]);
+        $existing = $stmt->fetch();
+        if (!$existing) {
+            Response::error('Order not found.', 404);
+        }
+        if (in_array($existing['status'], ['delivered', 'cancelled'], true)) {
+            Response::error('This order is ' . $existing['status'] . ' and can no longer be edited.');
+        }
+
+        $name = trim((string)($_POST['name'] ?? ''));
+        if ($name === '' || mb_strlen($name) > 120) {
+            Response::error('Please write the customer name.');
+        }
+        $phone = normalize_phone((string)($_POST['phone'] ?? ''));
+        if ($phone === null) {
+            Response::error('Please write a 10-digit phone number.');
+        }
+        $neededOn = trim((string)($_POST['needed_on'] ?? ''));
+        if ($neededOn === '' || mb_strlen($neededOn) > 160) {
+            Response::error('Please set when the food is needed.');
+        }
+        $items = $_POST['items'] ?? [];
+        if (!is_array($items) || count($items) === 0 || count($items) > 100) {
+            Response::error('Please add at least one dish.');
+        }
+        $notes       = mb_substr(trim((string)($_POST['notes'] ?? '')), 0, 2000);
+        $addressText = mb_substr(trim((string)($_POST['address_text'] ?? '')), 0, 2000);
+        $discountPct = min(100.0, max(0.0, (float)($_POST['discount_pct'] ?? 0)));
+        $deliveryCharge  = max(0.0, (float)($_POST['delivery_charge'] ?? 0));
+        $isComplimentary = !empty($_POST['is_complimentary']);
+
+        [$lines, $subtotal] = resolve_order_lines($pdo, $items);
+        if (!$lines) {
+            Response::error('Please add at least one dish.');
+        }
+
+        // Re-snapshot at the CURRENT gst rate — an edit is a fresh billing
+        // decision, so it is priced by today's rules like any other order.
+        $bill = compute_order_total($subtotal, (float)setting('gst_rate', '0'),
+                                    $discountPct, $deliveryCharge, $isComplimentary);
+
+        $pdo->beginTransaction();
+        try {
+            $pdo->prepare(
+                'UPDATE orders SET name = ?, phone = ?, needed_on = ?, address_text = ?, notes = ?,
+                                   total_estimate = ?, subtotal = ?, cgst = ?, sgst = ?, gst_rate = ?,
+                                   discount_pct = ?, discount_amount = ?, delivery_charge = ?,
+                                   is_complimentary = ?
+                   WHERE id = ?'
+            )->execute([
+                $name, $phone, $neededOn, $addressText ?: null, $notes ?: null,
+                $bill['total'], $bill['subtotal'], $bill['cgst'], $bill['sgst'], $bill['rate'],
+                $bill['discount_pct'], $bill['discount_amount'], $bill['delivery_charge'],
+                $bill['complimentary'] ? 1 : 0, $id,
+            ]);
+            insert_order_lines($pdo, $id, $lines, true);
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            error_log('admin orders/update failed: ' . $e->getMessage());
+            Response::error('Could not save the changes. Please try again.', 500);
+        }
+
+        // What actually moved, for the history shown in the drawer.
+        $changed = [];
+        foreach ([['name', $name], ['phone', $phone], ['needed_on', $neededOn],
+                  ['address_text', $addressText ?: null], ['notes', $notes ?: null]] as [$field, $now]) {
+            if ((string)$existing[$field] !== (string)$now) {
+                $changed[] = $field;
+            }
+        }
+        if ((float)$existing['total_estimate'] !== (float)$bill['total']) {
+            $changed[] = 'total';
+        }
+        log_order_event($id, 'admin', (int)$admin['id'], (string)$admin['username'], 'edited', [
+            'changed'    => $changed ?: ['items'],
+            'total_from' => (float)$existing['total_estimate'],
+            'total_to'   => $bill['total'],
+            'items'      => count($lines),
+        ]);
+
+        Response::json([
+            'ok'       => true,
+            'order_id' => $id,
+            'total'    => $bill['total'],
             'complimentary' => $bill['complimentary'],
         ]);
     }
@@ -391,6 +519,9 @@ function route($method, $action, $parts): void
             Response::error('Order not found.', 404);
         }
         db()->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $id]);
+        log_order_event($id, 'admin', (int)$admin['id'], (string)$admin['username'],
+            $status === 'cancelled' ? 'cancelled' : 'status',
+            ['from' => $order['status'], 'to' => $status]);
 
         // Notify the customer's devices (no-op if push not configured or no subscriptions).
         $pushSent = 0;

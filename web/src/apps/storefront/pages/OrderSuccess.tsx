@@ -12,13 +12,14 @@ import { OrderStatusPoller } from '../components/OrderStatusPoller';
 import { BillDetails, type BillItem, type BillGst } from '../components/BillDetails';
 import { PinSetup } from '../components/PinSetup';
 import { PushNudge } from '../../shared/push/PushNudge';
+import { CancelCountdown } from '../components/CancelCountdown';
 
 export function OrderSuccess() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { settings } = useAuth();
   const orderId = Number(id);
-  const { data, loading, error } = useFetch(() => ordersApi.show(orderId), [orderId]);
+  const { data, loading, error, refetch } = useFetch(() => ordersApi.show(orderId), [orderId]);
 
   if (loading) {
     return (
@@ -84,6 +85,13 @@ export function OrderSuccess() {
           <strong>{displayPhone(order.phone)}</strong> to confirm it shortly.
         </p>
       </div>
+
+      {/* Short self-cancel window, straight after placing. */}
+      <CancelCountdown
+        orderId={order.id}
+        secondsLeft={order.cancel_seconds_left}
+        onCancelled={() => refetch()}
+      />
 
       {/* Live status tracker */}
       <div className="mt-6">

@@ -79,6 +79,11 @@ export const adminOrdersApi = {
     adminApi.get(`orders/lookup_customer?phone=${encodeURIComponent(phone)}`) as Promise<{ customer: AdminLookupCustomer | null }>,
   create: (data: AdminNewOrderPayload) =>
     adminApi.post('orders/create', data) as Promise<{ order_id: number; total: number; complimentary: boolean }>,
+  /** Edit an existing order — same payload as create; prices are re-resolved server-side. */
+  update: (id: number, data: AdminNewOrderPayload) =>
+    adminApi.post(`orders/update/${id}`, data) as Promise<{
+      ok: true; order_id: number; total: number; complimentary: boolean;
+    }>,
   /** Mint a single-use claim link so a counter customer can sign in on their phone. */
   claimLink: (orderId: number) =>
     adminApi.post(`orders/claim_link/${orderId}`, {}) as Promise<{

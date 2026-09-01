@@ -17,6 +17,7 @@ import { SkeletonRows, Skeleton } from '../../shared/components/Skeleton';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { AddressCard } from '../components/AddressCard';
 import { ReorderButton } from '../components/ReorderButton';
+import { CancelCountdown } from '../components/CancelCountdown';
 import { PinSetup } from '../components/PinSetup';
 import { PushNudge } from '../../shared/push/PushNudge';
 
@@ -90,6 +91,15 @@ export function MyAccount() {
                     <p className="mt-1 text-xs text-brand-400">
                       Needed on: {o.needed_on} · {o.address_text ? 'Delivery' : 'Pickup'}
                     </p>
+                    {o.cancel_seconds_left > 0 && (
+                      <div className="mt-3">
+                        <CancelCountdown
+                          orderId={o.id}
+                          secondsLeft={o.cancel_seconds_left}
+                          onCancelled={() => orders.refetch()}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

@@ -49,6 +49,8 @@ export default function AdminArea() {
         >
           <Route index element={<AdminHome />} />
           <Route path="new-order" element={<RequireCap cap="new_order"><AdminNewOrder /></RequireCap>} />
+          {/* Same screen as new-order, hydrated from an existing order. */}
+          <Route path="orders/:id/edit" element={<RequireCap cap="new_order"><AdminNewOrder /></RequireCap>} />
           <Route path="dashboard" element={<RequireCap cap="dashboard"><AdminDashboard /></RequireCap>} />
           <Route path="orders" element={<RequireCap cap="orders"><AdminOrders /></RequireCap>} />
           <Route path="menu" element={<RequireCap cap="menu"><AdminMenu /></RequireCap>} />

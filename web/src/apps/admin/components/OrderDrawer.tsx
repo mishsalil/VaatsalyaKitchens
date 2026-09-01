@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Phone, MessageCircle, MapPin, Clock, Tag, StickyNote } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Phone, MessageCircle, MapPin, Clock, Tag, StickyNote, Pencil, History } from 'lucide-react';
 import { Sheet } from '../../shared/components/ui/Sheet';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { Skeleton } from '../../shared/components/Skeleton';
@@ -8,7 +9,7 @@ import { useAdminAuth } from '../context/AdminAuthContext';
 import { adminOrdersApi } from '../api/endpoints';
 import { rupees, displayPhone } from '../../shared/lib/format';
 import { lineLabel } from '../../shared/types';
-import type { AdminOrder } from '../types';
+import type { AdminOrder, AdminOrderEvent } from '../types';
 import type { OrderStatus } from '../../shared/types';
 
 const STATUSES: OrderStatus[] = ['new', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'cancelled'];
@@ -21,7 +22,7 @@ type Props = {
 
 export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
   const toast = useToast();
-  const { admin } = useAdminAuth();
+  const { admin, can } = useAdminAuth();
   const [order, setOrder] = useState<AdminOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,6 +102,17 @@ export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
               {new Date(order.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>
+
+          {/* Editing is refused server-side once an order is delivered or
+              cancelled, so don't offer it there either. */}
+          {can('new_order') && order.status !== 'delivered' && order.status !== 'cancelled' && (
+            <Link
+              to={`/admin/orders/${order.id}/edit`}
+              className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-cream-100"
+            >
+              <Pencil className="h-3.5 w-3.5" /> Edit this order
+            </Link>
+          )}
 
           {/* Customer */}
           <Section icon={<Phone className="h-4 w-4" />} title="Customer">
@@ -198,6 +210,26 @@ export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
               </div>
             </div>
           </Section>
+
+          {/* Audit trail — who changed this order, and how (migration_007). */}
+          {order.events?.length > 0 && (
+            <Section icon={<History className="h-4 w-4" />} title="History">
+              <ol className="space-y-2">
+                {order.events.map((e, i) => (
+                  <li key={i} className="text-sm">
+                    <span className="font-medium text-brand-800">{eventLabel(e)}</span>
+                    <span className="text-brand-500">
+                      {' · '}{e.actor_label || e.actor_type}
+                      {' · '}
+                      {new Date(e.created_at).toLocaleString('en-IN', {
+                        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </Section>
+          )}
         </div>
       ) : (
         <p className="p-6 text-center text-sm text-brand-500">Could not load this order.</p>
@@ -213,6 +245,27 @@ function Section({ icon, title, children }: { icon: ReactNode; title: string; ch
       <div className="mt-2">{children}</div>
     </div>
   );
+}
+
+/** One line of history, phrased for a human rather than dumping the JSON. */
+function eventLabel(e: AdminOrderEvent): string {
+  const d = (e.detail ?? {}) as Record<string, any>;
+  switch (e.action) {
+    case 'created':
+      return d.channel === 'counter' ? 'Taken at the counter' : 'Placed by the customer';
+    case 'edited': {
+      const fields = Array.isArray(d.changed) ? d.changed.join(', ') : 'items';
+      const money =
+        d.total_from !== d.total_to ? ` (${rupees(d.total_from)} → ${rupees(d.total_to)})` : '';
+      return `Edited — ${fields}${money}`;
+    }
+    case 'cancelled':
+      return e.actor_type === 'customer' ? 'Cancelled by the customer' : 'Cancelled';
+    case 'status':
+      return `Status ${d.from} → ${d.to}`;
+    default:
+      return e.action;
+  }
 }
 
 function labelOf(s: OrderStatus): string {
