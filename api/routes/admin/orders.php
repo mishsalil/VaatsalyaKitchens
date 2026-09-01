@@ -550,12 +550,10 @@ function route($method, $action, $parts): void
         // Now — and only now — tell the customer.
         $pushSent = 0;
         if ((int)$order['customer_id'] > 0) {
-            $cfg = config();
-            [$pushSent] = push_send_to_customer(
                 (int)$order['customer_id'],
                 'Order #' . $id . ' cancelled',
                 admin_status_push_body('cancelled'),
-                $cfg['base_url'] . '/account'
+                '/account'
             );
         }
 
@@ -596,12 +594,10 @@ function route($method, $action, $parts): void
 
         $pushSent = 0;
         if ((int)$order['customer_id'] > 0) {
-            $cfg = config();
             [$pushSent] = push_send_to_customer(
-                (int)$order['customer_id'],
                 'Order #' . $id . ' could not be cancelled',
                 $reason !== '' ? $reason : 'Your food is already being prepared. Please call us and we will help.',
-                $cfg['base_url'] . '/account'
+                '/account'
             );
         }
         Response::json(['ok' => true, 'customer_notified' => (int)$pushSent]);
@@ -635,11 +631,9 @@ function route($method, $action, $parts): void
         // devices — not the rep who just did it, who already knows.
         $staffNotified = 0;
         if ($status === 'cancelled' && $order['status'] !== 'cancelled') {
-            $cfg = config();
             [$staffNotified] = push_send_to_admins(
                 'Order #' . $id . ' cancelled',
-                'Cancelled by ' . $admin['username'] . '. Please make sure the kitchen knows.',
-                $cfg['base_url'] . '/admin/orders',
+                '/admin/orders',
                 (int)$admin['id']
             );
         }
@@ -650,12 +644,10 @@ function route($method, $action, $parts): void
            customer is never told the food stopped while it is still cooking. */
         $pushSent = 0;
         if ((int)$order['customer_id'] > 0 && $status !== $order['status'] && $status !== 'cancelled') {
-            $cfg = config();
             [$pushSent] = push_send_to_customer(
                 (int)$order['customer_id'],
                 'Order #' . $id . ' — ' . status_label($status),
-                admin_status_push_body($status),
-                $cfg['base_url'] . '/account'
+                '/account'
             );
         }
         Response::json([

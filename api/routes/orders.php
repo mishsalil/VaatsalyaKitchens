@@ -297,11 +297,9 @@ function route($method, $action, $parts): void
         ]);
 
         // Alert every staff device — no admin did this, so nobody is excluded.
-        $cfg = config();
-        [$pushSent] = push_send_to_admins(
             'Cancellation requested — order #' . $id,
             trim(($customer['name'] ?? 'A customer') . ' wants to cancel. Check with the kitchen and confirm.'),
-            $cfg['base_url'] . '/admin/orders'
+            '/admin/orders'
         );
 
         Response::json([

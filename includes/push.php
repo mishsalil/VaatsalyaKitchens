@@ -39,8 +39,15 @@ function push_send(array $subscriptionRows, string $title, string $body, string 
     $payload = json_encode([
         'title' => $title,
         'body'  => $body,
-        'url'   => $url ?: ($cfg['base_url'] . '/account'),
-        'icon'  => $cfg['base_url'] . '/assets/icon-192.png',
+        /* RELATIVE on purpose. The service worker that handles the click is
+           served from the SPA's own origin, and both client.navigate() and
+           clients.openWindow() resolve a relative path against it — so a
+           notification always opens the app the user actually installed.
+           Absolute URLs built from config's base_url sent people to whatever
+           that setting happened to say (locally: :8080, the retired PHP app),
+           and it has to be maintained per environment. This needs no config. */
+        'url'   => $url ?: '/account',
+        'icon'  => '/assets/icon-192.png',
         'urgent' => $urgent,
     ], JSON_UNESCAPED_UNICODE);
 
