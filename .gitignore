@@ -6,3 +6,7 @@ includes/config.php
 
 # machine-local plugin state (neural stats, policy cache)
 .claude-flow/
+
+# ruflo plugin local state
+.claude/proven-config.json
+.claude/.proven-config-version
