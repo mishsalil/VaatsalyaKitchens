@@ -6,7 +6,7 @@ import { useFetch } from '../../shared/hooks/useFetch';
 import { adminOrdersApi, type AdminNewOrderLine } from '../api/endpoints';
 import { menuApi } from '../../shared/api/endpoints';
 import { computeOrderTotal } from '../../shared/lib/gst';
-import { formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
+import { defaultNeededOnLocal, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
 import { cartKey, type MenuItem } from '../../shared/types';
 import { Button } from '../../shared/components/ui/Button';
 
@@ -62,7 +62,8 @@ export function AdminNewOrder() {
 
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
-  const [whenLocal, setWhenLocal] = useState('');
+  // Prefilled 40 minutes out — the counter's usual answer, still editable.
+  const [whenLocal, setWhenLocal] = useState(defaultNeededOnLocal);
   // needed_on is free text on the order ("Sat 20 Jul, 1:00 PM"), which a
   // datetime-local input cannot represent — so edit mode keeps it as text
   // rather than forcing the rep to re-pick a time that is already correct.
@@ -273,7 +274,9 @@ export function AdminNewOrder() {
   );
 
   const reset = () => {
-    setPhone(''); setName(''); setWhenLocal(''); setAddress(''); setNotes('');
+    // Recomputed, not blanked — the next order gets a fresh 40-minutes-from-now,
+    // not a stale one from whenever this screen first loaded.
+    setPhone(''); setName(''); setWhenLocal(defaultNeededOnLocal()); setAddress(''); setNotes('');
     setKnown(null); setCart({}); setQuery('');
     setDiscountPct(''); setDeliveryCharge(''); setComplimentary(false);
     setError(null); setPlaced(null); setClaimNote(null);

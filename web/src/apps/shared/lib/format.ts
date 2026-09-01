@@ -72,6 +72,22 @@ export function formatNeededOn(value: string): string {
   return `${day} ${date} ${mon}, ${h}:${mm} ${ampm}`;
 }
 
+/**
+ * The default "needed on" value: 40 minutes from now, as a datetime-local
+ * string. Most orders — at the counter and from the storefront — are for as
+ * soon as the kitchen can manage, so an empty field made everyone re-enter the
+ * same answer. It is a prefill, not a constraint: the field stays editable and
+ * the quick chips still jump to Today / Tomorrow / the weekend.
+ *
+ * Built from local calendar parts rather than toISOString(), which would shift
+ * the value by the UTC offset and show the wrong time in IST.
+ */
+export function defaultNeededOnLocal(minutesAhead = 40): string {
+  const d = new Date(Date.now() + minutesAhead * 60_000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Strip a phone to digits and normalize to 91XXXXXXXXXX (returns null if invalid). */
 export function normalizePhone(input: string): string | null {
   let d = (input || '').replace(/\D/g, '');

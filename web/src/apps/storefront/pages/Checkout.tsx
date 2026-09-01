@@ -6,7 +6,7 @@ import { useFetch } from '../../shared/hooks/useFetch';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useCart } from '../../shared/context/CartContext';
 import { useToast } from '../../shared/context/ToastContext';
-import { displayPhone, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
+import { defaultNeededOnLocal, displayPhone, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
 import { Input, Textarea } from '../../shared/components/ui/Input';
 import { Field } from '../../shared/components/ui/Field';
 import { Button } from '../../shared/components/ui/Button';
@@ -34,7 +34,9 @@ export function Checkout() {
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user ? displayPhone(user.phone) : '');
   const [occasion, setOccasion] = useState('');
-  const [whenLocal, setWhenLocal] = useState('');
+  // Prefilled 40 minutes out. The quick chips still move it to Today evening,
+  // tomorrow or the weekend for anything planned ahead.
+  const [whenLocal, setWhenLocal] = useState(defaultNeededOnLocal);
   const [notes, setNotes] = useState('');
   const [address, setAddress] = useState<AddressPayload>({ mode: 'pickup' });
   const [submitting, setSubmitting] = useState(false);
