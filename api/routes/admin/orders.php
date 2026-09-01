@@ -550,6 +550,7 @@ function route($method, $action, $parts): void
         // Now — and only now — tell the customer.
         $pushSent = 0;
         if ((int)$order['customer_id'] > 0) {
+            [$pushSent] = push_send_to_customer(
                 (int)$order['customer_id'],
                 'Order #' . $id . ' cancelled',
                 admin_status_push_body('cancelled'),
@@ -595,6 +596,7 @@ function route($method, $action, $parts): void
         $pushSent = 0;
         if ((int)$order['customer_id'] > 0) {
             [$pushSent] = push_send_to_customer(
+                (int)$order['customer_id'],
                 'Order #' . $id . ' could not be cancelled',
                 $reason !== '' ? $reason : 'Your food is already being prepared. Please call us and we will help.',
                 '/account'
@@ -633,6 +635,7 @@ function route($method, $action, $parts): void
         if ($status === 'cancelled' && $order['status'] !== 'cancelled') {
             [$staffNotified] = push_send_to_admins(
                 'Order #' . $id . ' cancelled',
+                'Cancelled by ' . $admin['username'] . '. Please make sure the kitchen knows.',
                 '/admin/orders',
                 (int)$admin['id']
             );
@@ -647,6 +650,7 @@ function route($method, $action, $parts): void
             [$pushSent] = push_send_to_customer(
                 (int)$order['customer_id'],
                 'Order #' . $id . ' — ' . status_label($status),
+                admin_status_push_body($status),
                 '/account'
             );
         }
