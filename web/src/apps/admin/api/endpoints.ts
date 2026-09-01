@@ -40,12 +40,50 @@ export const adminAuthApi = {
   logout: () => adminApi.post('auth/logout', {}),
 };
 
+/** One cart line sent to orders/create. Prices are re-read server-side. */
+export interface AdminNewOrderLine {
+  id: number;
+  qty: number;
+  variant_id?: number;
+  addon_ids?: number[];
+}
+
+export interface AdminNewOrderPayload {
+  name: string;
+  phone: string;
+  needed_on: string;
+  address_text?: string;
+  notes?: string;
+  items: AdminNewOrderLine[];
+  /** Counter billing. GST is charged on (subtotal - discount); delivery is added after tax. */
+  discount_pct?: number;
+  delivery_charge?: number;
+  is_complimentary?: boolean;
+}
+
+/** Known customer matched by phone during counter entry. */
+export interface AdminLookupCustomer {
+  id: number;
+  name: string;
+  phone: string;
+  address_text: string | null;
+}
+
 export const adminOrdersApi = {
   list: (status?: OrderStatus) => adminApi.get('orders' + (status ? `?status=${status}` : '')) as Promise<{ orders: AdminOrderListItem[] }>,
   show: (id: number) => adminApi.get(`orders/show/${id}`) as Promise<{ order: AdminOrder }>,
   updateStatus: (id: number, status: OrderStatus) =>
     adminApi.post(`orders/update_status/${id}`, { status }) as Promise<{ ok: true; status: OrderStatus; push_sent: number }>,
   export: (status?: OrderStatus) => adminApi.csvGet('orders/export' + (status ? `?status=${status}` : '')),
+  lookupCustomer: (phone: string) =>
+    adminApi.get(`orders/lookup_customer?phone=${encodeURIComponent(phone)}`) as Promise<{ customer: AdminLookupCustomer | null }>,
+  create: (data: AdminNewOrderPayload) =>
+    adminApi.post('orders/create', data) as Promise<{ order_id: number; total: number; complimentary: boolean }>,
+  /** Mint a single-use claim link so a counter customer can sign in on their phone. */
+  claimLink: (orderId: number) =>
+    adminApi.post(`orders/claim_link/${orderId}`, {}) as Promise<{
+      token: string; phone: string; name: string; has_pin: boolean; days: number;
+    }>,
 };
 
 /** Variant row sent to add_item/update_item (full-replace). id is optional on edit. */

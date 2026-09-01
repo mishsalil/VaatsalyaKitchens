@@ -25,6 +25,13 @@ const COPY: Record<PushSurface, { title: string; body: string }> = {
     title: 'Order updates, straight to this device',
     body: 'Never miss a confirmation or "out for delivery" update. You can switch notifications off anytime from your browser settings.',
   },
+  // Right after a counter order's claim link is opened — the customer has just
+  // arrived on their own phone with a live order, so this is the one moment
+  // notifications are obviously worth having.
+  claim: {
+    title: 'Want updates on this order?',
+    body: 'We will ping this phone when your order is being prepared and when it is on its way — no app needed, and you can switch it off anytime.',
+  },
 };
 
 /**

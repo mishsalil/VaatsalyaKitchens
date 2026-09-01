@@ -46,15 +46,30 @@ export function OrderSuccess() {
     unit: it.unit,
     price: it.price,
   }));
-  const gst: BillGst | null = order.gst_rate > 0
-    ? {
-        subtotal: order.subtotal,
-        cgst: order.cgst,
-        sgst: order.sgst,
-        roundOff: Math.round((order.total_estimate - order.subtotal - order.cgst - order.sgst) * 100) / 100,
-        rate: order.gst_rate,
-      }
-    : null;
+  // Counter orders can carry a discount, a delivery charge or be complimentary,
+  // so the bill card is shown whenever any of those is set — not only when GST is.
+  const gst: BillGst | null =
+    order.gst_rate > 0 || order.discount_amount > 0 || order.delivery_charge > 0 || order.is_complimentary
+      ? {
+          subtotal: order.subtotal,
+          cgst: order.cgst,
+          sgst: order.sgst,
+          roundOff:
+            Math.round(
+              (order.total_estimate -
+                (order.subtotal - order.discount_amount) -
+                order.cgst -
+                order.sgst -
+                order.delivery_charge) *
+                100,
+            ) / 100,
+          rate: order.gst_rate,
+          discountPct: order.discount_pct,
+          discountAmount: order.discount_amount,
+          deliveryCharge: order.delivery_charge,
+          complimentary: order.is_complimentary,
+        }
+      : null;
 
   return (
     <div className="container-page py-6">

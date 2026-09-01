@@ -147,19 +147,27 @@ export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
                 <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                   <span className="text-brand-800">
                     {lineLabel(it.item_name, it.variant_name, it.addons_text)} <span className="text-brand-400">× {it.qty}</span>
-                    <span className="ml-1 text-xs text-brand-400">({it.unit})</span>
+                    {it.unit ? <span className="ml-1 text-xs text-brand-400">({it.unit})</span> : null}
                   </span>
                   <span className="font-semibold text-brand-900">{rupees(it.price * it.qty)}</span>
                 </li>
               ))}
             </ul>
             <div className="mt-2 space-y-1 px-1">
-              {order.gst_rate > 0 && (
+              {(order.gst_rate > 0 || order.discount_amount > 0 || order.delivery_charge > 0) && (
+                <div className="flex items-center justify-between text-sm text-brand-600">
+                  <span>Subtotal</span>
+                  <span>{rupees(order.subtotal)}</span>
+                </div>
+              )}
+              {order.discount_amount > 0 && (
+                <div className="flex items-center justify-between text-sm text-brand-600">
+                  <span>Discount ({order.discount_pct}%)</span>
+                  <span>− {rupees(order.discount_amount)}</span>
+                </div>
+              )}
+              {!order.is_complimentary && order.gst_rate > 0 && (
                 <>
-                  <div className="flex items-center justify-between text-sm text-brand-600">
-                    <span>Subtotal</span>
-                    <span>{rupees(order.subtotal)}</span>
-                  </div>
                   <div className="flex items-center justify-between text-sm text-brand-600">
                     <span>CGST ({order.gst_rate / 2}%)</span>
                     <span>{rupees(order.cgst)}</span>
@@ -168,17 +176,25 @@ export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
                     <span>SGST ({order.gst_rate / 2}%)</span>
                     <span>{rupees(order.sgst)}</span>
                   </div>
-                  {roundOffOf(order) > 0 && (
-                    <div className="flex items-center justify-between text-sm text-brand-600">
-                      <span>Round off</span>
-                      <span>+{rupees(roundOffOf(order))}</span>
-                    </div>
-                  )}
                 </>
+              )}
+              {order.delivery_charge > 0 && (
+                <div className="flex items-center justify-between text-sm text-brand-600">
+                  <span>Delivery</span>
+                  <span>{rupees(order.delivery_charge)}</span>
+                </div>
+              )}
+              {roundOffOf(order) > 0 && !order.is_complimentary && (
+                <div className="flex items-center justify-between text-sm text-brand-600">
+                  <span>Round off</span>
+                  <span>+{rupees(roundOffOf(order))}</span>
+                </div>
               )}
               <div className="flex items-center justify-between border-t border-cream-200 pt-1">
                 <span className="text-sm font-semibold text-brand-700">To pay</span>
-                <span className="text-lg font-bold text-brand-900">{rupees(order.total_estimate)}</span>
+                <span className="text-lg font-bold text-brand-900">
+                  {order.is_complimentary ? 'COMPLIMENTARY' : rupees(order.total_estimate)}
+                </span>
               </div>
             </div>
           </Section>
@@ -203,7 +219,12 @@ function labelOf(s: OrderStatus): string {
   return { new: 'New', confirmed: 'Confirmed', preparing: 'Preparing', out_for_delivery: 'On the way', delivered: 'Delivered', cancelled: 'Cancelled' }[s];
 }
 
-/** Paise adjustment between the exact subtotal+tax and the rounded-up total_estimate. */
+/** Paise adjustment left over once every other billed line (discount and
+    delivery included, per migration_006) is taken off the rounded-up total. */
 function roundOffOf(o: AdminOrder): number {
-  return Math.round((o.total_estimate - o.subtotal - o.cgst - o.sgst) * 100) / 100;
+  return (
+    Math.round(
+      (o.total_estimate - (o.subtotal - o.discount_amount) - o.cgst - o.sgst - o.delivery_charge) * 100,
+    ) / 100
+  );
 }

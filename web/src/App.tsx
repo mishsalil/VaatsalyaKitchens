@@ -7,6 +7,7 @@ import { Checkout } from './apps/storefront/pages/Checkout';
 import { OrderSuccess } from './apps/storefront/pages/OrderSuccess';
 import { MyAccount } from './apps/storefront/pages/MyAccount';
 import { Login } from './apps/storefront/pages/Login';
+import { Claim } from './apps/storefront/pages/Claim';
 import { RequireAuth } from './apps/shared/components/RequireAuth';
 
 // The entire admin area is one lazy chunk — the customer storefront bundle
@@ -41,6 +42,8 @@ export default function App() {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/order-success/:id" element={<OrderSuccess />} />
         <Route path="/login" element={<Login />} />
+        {/* One-time claim link from a counter order (WhatsApped by the rep). */}
+        <Route path="/claim/:token" element={<Claim />} />
         <Route
           path="/account"
           element={

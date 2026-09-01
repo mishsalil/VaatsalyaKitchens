@@ -2,8 +2,12 @@
 /* GET  /api/admin/orders                  — recent orders (limit 200) with item_count.
    GET  /api/admin/orders/show/{id}        — full order + items + customer.
    POST /api/admin/orders/update_status/{id} — change status; pushes the customer on change.
+   GET  /api/admin/orders/lookup_customer  ?phone= → known customer + last address.
+   POST /api/admin/orders/create           — counter order entry (cap: new_order).
    The VKADMIN session is started by api/index.php; every action requires an admin. */
 require_once __DIR__ . '/../../../includes/push.php';
+require_once __DIR__ . '/../../../includes/settings.php';
+require_once __DIR__ . '/../../../includes/gst.php';
 
 function route($method, $action, $parts): void
 {
@@ -16,6 +20,7 @@ function route($method, $action, $parts): void
         $sql =
             'SELECT o.id, o.name, o.phone, o.occasion, o.needed_on, o.address_text,
                     o.status, o.total_estimate, o.subtotal, o.cgst, o.sgst, o.gst_rate,
+                    o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
                     o.created_at, o.customer_id, o.branch_id,
                     b.name AS branch_name,
                     (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) AS item_count
@@ -36,6 +41,10 @@ function route($method, $action, $parts): void
             $o['cgst']      = (float)$o['cgst'];
             $o['sgst']      = (float)$o['sgst'];
             $o['gst_rate']  = (float)$o['gst_rate'];
+            $o['discount_pct']     = (float)$o['discount_pct'];
+            $o['discount_amount']  = (float)$o['discount_amount'];
+            $o['delivery_charge']  = (float)$o['delivery_charge'];
+            $o['is_complimentary'] = (bool)$o['is_complimentary'];
             $o['item_count'] = (int)$o['item_count'];
             $o['customer_id'] = $o['customer_id'] !== null ? (int)$o['customer_id'] : null;
         }
@@ -50,7 +59,8 @@ function route($method, $action, $parts): void
         $sql =
             'SELECT o.id, o.created_at, o.needed_on, o.name, o.phone, o.status,
                     (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) AS item_count,
-                    o.subtotal, o.cgst, o.sgst, o.total_estimate,
+                    o.subtotal, o.discount_pct, o.discount_amount, o.cgst, o.sgst,
+                    o.delivery_charge, o.is_complimentary, o.total_estimate,
                     o.address_text, b.name AS branch_name
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id';
@@ -68,12 +78,17 @@ function route($method, $action, $parts): void
         header('Content-Disposition: attachment; filename="vaatsalya-orders.csv"');
         $out = fopen('php://output', 'w');
         fputcsv($out, ['id', 'created_at', 'needed_on', 'name', 'phone', 'status',
-                       'item_count', 'subtotal', 'cgst', 'sgst', 'total', 'address', 'branch']);
+                       'item_count', 'subtotal', 'discount_pct', 'discount_amount',
+                       'cgst', 'sgst', 'delivery_charge', 'complimentary', 'total',
+                       'address', 'branch']);
         foreach ($rows as $r) {
             fputcsv($out, [
                 $r['id'], $r['created_at'], $r['needed_on'], $r['name'], $r['phone'], $r['status'],
-                (int)$r['item_count'], (float)$r['subtotal'], (float)$r['cgst'],
-                (float)$r['sgst'], (float)$r['total_estimate'], $r['address_text'] ?? '', $r['branch_name'] ?? '',
+                (int)$r['item_count'], (float)$r['subtotal'],
+                (float)$r['discount_pct'], (float)$r['discount_amount'],
+                (float)$r['cgst'], (float)$r['sgst'], (float)$r['delivery_charge'],
+                (int)$r['is_complimentary'] ? 'yes' : 'no',
+                (float)$r['total_estimate'], $r['address_text'] ?? '', $r['branch_name'] ?? '',
             ]);
         }
         fclose($out);
@@ -87,6 +102,7 @@ function route($method, $action, $parts): void
             'SELECT o.id, o.customer_id, o.name, o.phone, o.occasion, o.needed_on,
                     o.address_text, o.lat, o.lng, o.notes, o.status, o.total_estimate,
                     o.subtotal, o.cgst, o.sgst, o.gst_rate,
+                    o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
                     o.created_at, o.branch_id, b.name AS branch_name
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id
@@ -109,6 +125,10 @@ function route($method, $action, $parts): void
         $order['cgst']      = (float)$order['cgst'];
         $order['sgst']      = (float)$order['sgst'];
         $order['gst_rate']  = (float)$order['gst_rate'];
+        $order['discount_pct']     = (float)$order['discount_pct'];
+        $order['discount_amount']  = (float)$order['discount_amount'];
+        $order['delivery_charge']  = (float)$order['delivery_charge'];
+        $order['is_complimentary'] = (bool)$order['is_complimentary'];
         $order['customer_id'] = $order['customer_id'] !== null ? (int)$order['customer_id'] : null;
 
         // Customer profile (if linked).
@@ -129,6 +149,226 @@ function route($method, $action, $parts): void
         $order['items'] = $items;
         $order['customer'] = $customer;
         Response::json(['order' => $order]);
+    }
+
+    // --- known-customer lookup for counter entry (phone → name + last address) ---
+    if ($action === 'lookup_customer' && $method === 'GET') {
+        require_admin_cap('new_order');
+        $phone = normalize_phone((string)($_GET['phone'] ?? ''));
+        if ($phone === null) {
+            Response::json(['customer' => null]);
+        }
+        $stmt = db()->prepare('SELECT id, name, phone FROM customers WHERE phone = ?');
+        $stmt->execute([$phone]);
+        $c = $stmt->fetch();
+        if (!$c) {
+            Response::json(['customer' => null]);
+        }
+        $astmt = db()->prepare(
+            'SELECT address_text FROM addresses WHERE customer_id = ?
+              ORDER BY is_default DESC, id DESC LIMIT 1'
+        );
+        $astmt->execute([(int)$c['id']]);
+        $addr = $astmt->fetch();
+        Response::json(['customer' => [
+            'id'           => (int)$c['id'],
+            'name'         => $c['name'],
+            'phone'        => $c['phone'],
+            'address_text' => $addr ? $addr['address_text'] : null,
+        ]]);
+    }
+
+    // --- one-time claim link for a counter customer ---
+    // Returns the raw token; the caller builds the URL from its own origin, so
+    // the link always points at the app the rep is actually looking at.
+    if ($action === 'claim_link' && $method === 'POST') {
+        require_admin_cap('new_order');
+        require_csrf_api($_POST);
+        $id = (int)($parts[3] ?? 0);
+        $stmt = db()->prepare('SELECT customer_id, name, phone FROM orders WHERE id = ?');
+        $stmt->execute([$id]);
+        $order = $stmt->fetch();
+        if (!$order) {
+            Response::error('Order not found.', 404);
+        }
+        $customerId = (int)($order['customer_id'] ?? 0);
+        if ($customerId <= 0) {
+            Response::error('This order is not linked to a customer.');
+        }
+        $cstmt = db()->prepare('SELECT pin_hash FROM customers WHERE id = ?');
+        $cstmt->execute([$customerId]);
+        $customer = $cstmt->fetch();
+        Response::json([
+            'token'   => issue_claim_token($customerId),
+            'phone'   => $order['phone'],
+            'name'    => $order['name'],
+            'has_pin' => $customer ? $customer['pin_hash'] !== null : false,
+            'days'    => CLAIM_TOKEN_DAYS,
+        ]);
+    }
+
+    // --- counter order entry ---
+    // Mirrors orders.php::create (prices are always re-read from the DB, never
+    // trusted from the client) but runs on the admin session and lands the order
+    // as `confirmed`: the rep has the customer in front of them, so there is
+    // nothing left to confirm by phone.
+    if ($action === 'create' && $method === 'POST') {
+        require_admin_cap('new_order');
+        require_csrf_api($_POST);
+
+        $name = trim((string)($_POST['name'] ?? ''));
+        if ($name === '' || mb_strlen($name) > 120) {
+            Response::error('Please write the customer name.');
+        }
+        $phone = normalize_phone((string)($_POST['phone'] ?? ''));
+        if ($phone === null) {
+            Response::error('Please write a 10-digit phone number.');
+        }
+        $neededOn = trim((string)($_POST['needed_on'] ?? ''));
+        if ($neededOn === '' || mb_strlen($neededOn) > 160) {
+            Response::error('Please set when the food is needed.');
+        }
+        $items = $_POST['items'] ?? [];
+        if (!is_array($items) || count($items) === 0 || count($items) > 100) {
+            Response::error('Please add at least one dish.');
+        }
+        $notes       = mb_substr(trim((string)($_POST['notes'] ?? '')), 0, 2000);
+        $addressText = mb_substr(trim((string)($_POST['address_text'] ?? '')), 0, 2000);
+
+        // Counter billing adjustments (migration_006). Clamped here as well as
+        // in compute_order_total so a bad client can never bill a negative.
+        $discountPct    = min(100.0, max(0.0, (float)($_POST['discount_pct'] ?? 0)));
+        $deliveryCharge = max(0.0, (float)($_POST['delivery_charge'] ?? 0));
+        $isComplimentary = !empty($_POST['is_complimentary']);
+
+        $pdo = db();
+        $lines = [];
+        $total = 0.0;
+        $itemStmt    = $pdo->prepare('SELECT name, price, unit FROM menu_items WHERE id = ? AND available = 1');
+        $variantStmt = $pdo->prepare('SELECT id, name, price_delta FROM menu_item_variants WHERE item_id = ? ORDER BY sort_order, id');
+        $addonStmt   = $pdo->prepare('SELECT id, name, price FROM menu_item_addons WHERE item_id = ? AND available = 1');
+        foreach ($items as $it) {
+            $id  = (int)($it['id'] ?? 0);
+            $qty = (int)($it['qty'] ?? 0);
+            if ($id <= 0 || $qty <= 0 || $qty > 999) {
+                continue;
+            }
+            $itemStmt->execute([$id]);
+            $menuItem = $itemStmt->fetch();
+            if (!$menuItem) {
+                continue;
+            }
+            $unit = (float)$menuItem['price'];
+
+            $variantStmt->execute([$id]);
+            $itemVariants = $variantStmt->fetchAll();
+            $variantId = (int)($it['variant_id'] ?? 0);
+            $variantName = null;
+            if ($itemVariants) {
+                $chosen = null;
+                foreach ($itemVariants as $v) {
+                    if ((int)$v['id'] === $variantId) { $chosen = $v; break; }
+                }
+                if (!$chosen) {
+                    Response::error('Please choose a size for ' . $menuItem['name'] . '.');
+                }
+                $unit += (float)$chosen['price_delta'];
+                $variantName = $chosen['name'];
+            }
+
+            $addonNames = [];
+            $addonIds = $it['addon_ids'] ?? [];
+            if (is_array($addonIds) && $addonIds) {
+                $addonStmt->execute([$id]);
+                $valid = [];
+                foreach ($addonStmt->fetchAll() as $a) {
+                    $valid[(int)$a['id']] = $a;
+                }
+                foreach ($addonIds as $aid) {
+                    $aid = (int)$aid;
+                    if (isset($valid[$aid])) {
+                        $unit += (float)$valid[$aid]['price'];
+                        $addonNames[] = $valid[$aid]['name'];
+                    }
+                }
+            }
+
+            $lines[] = [
+                'name'         => $menuItem['name'],
+                'unit'         => $menuItem['unit'],
+                'price'        => $unit,
+                'qty'          => $qty,
+                'variant_name' => $variantName,
+                'addons_text'  => $addonNames ? implode(', ', $addonNames) : null,
+            ];
+            $total += $unit * $qty;
+        }
+        if (!$lines) {
+            Response::error('Please add at least one dish.');
+        }
+
+        $bill = compute_order_total(
+            $total,
+            (float)setting('gst_rate', '0'),
+            $discountPct,
+            $deliveryCharge,
+            $isComplimentary
+        );
+        $branchId = config()['default_branch_id'] ?? 1;
+
+        $pdo->beginTransaction();
+        try {
+            $customerId = upsert_customer($name, $phone);
+
+            if ($addressText !== '') {
+                $stmt = $pdo->prepare('SELECT id FROM addresses WHERE customer_id = ? AND address_text = ?');
+                $stmt->execute([$customerId, $addressText]);
+                if (!$stmt->fetch()) {
+                    $countStmt = $pdo->prepare('SELECT COUNT(*) AS c FROM addresses WHERE customer_id = ?');
+                    $countStmt->execute([$customerId]);
+                    $isFirst = (int)$countStmt->fetch()['c'] === 0;
+                    $pdo->prepare(
+                        'INSERT INTO addresses (customer_id, label, address_text, lat, lng, is_default)
+                         VALUES (?, ?, ?, NULL, NULL, ?)'
+                    )->execute([$customerId, $isFirst ? 'Home' : 'Saved address', $addressText, $isFirst ? 1 : 0]);
+                }
+            }
+
+            $pdo->prepare(
+                'INSERT INTO orders (customer_id, name, phone, needed_on, address_text, notes,
+                                     total_estimate, subtotal, cgst, sgst, gst_rate,
+                                     discount_pct, discount_amount, delivery_charge, is_complimentary,
+                                     branch_id, status)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$customerId, $name, $phone, $neededOn, $addressText ?: null, $notes ?: null,
+                        $bill['total'], $bill['subtotal'], $bill['cgst'], $bill['sgst'], $bill['rate'],
+                        $bill['discount_pct'], $bill['discount_amount'], $bill['delivery_charge'],
+                        $bill['complimentary'] ? 1 : 0,
+                        $branchId, 'confirmed']);
+            $orderId = (int)$pdo->lastInsertId();
+
+            $lineStmt = $pdo->prepare(
+                'INSERT INTO order_items (order_id, item_name, variant_name, addons_text, unit, price, qty)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+            foreach ($lines as $line) {
+                $lineStmt->execute([
+                    $orderId, $line['name'], $line['variant_name'], $line['addons_text'],
+                    $line['unit'], $line['price'], $line['qty'],
+                ]);
+            }
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            error_log('admin orders/create failed: ' . $e->getMessage());
+            Response::error('Could not save the order. Please try again.', 500);
+        }
+
+        Response::json([
+            'order_id'      => $orderId,
+            'total'         => $bill['total'],
+            'complimentary' => $bill['complimentary'],
+        ]);
     }
 
     // --- update status (with customer push) ---

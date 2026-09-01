@@ -112,6 +112,52 @@ function issue_remember_token(int $customerId): void
     )->execute([$customerId, $customerId]);
 }
 
+/* --- One-time claim links (counter orders) ---------------------------------
+   A customer whose order was entered by a rep has no pin_hash and no session,
+   so they cannot sign in or track the order. The rep WhatsApps them a claim
+   link; opening it signs that device in once, after which the normal PIN setup
+   on /account applies.
+
+   Reuses customer_tokens: same selector/validator shape, same trust model (the
+   holder of the secret is the customer). The difference is lifetime — claim
+   tokens are short-lived and deleted the moment they are used. */
+const CLAIM_TOKEN_DAYS = 7;
+
+/** Issue a single-use claim token. Returns "selector.validator" for the URL. */
+function issue_claim_token(int $customerId): string
+{
+    $selector  = bin2hex(random_bytes(12));      // 24 chars, matches the column
+    $validator = bin2hex(random_bytes(32));
+    db()->prepare(
+        'INSERT INTO customer_tokens (customer_id, selector, validator_hash, expires_at)
+         VALUES (?, ?, ?, ?)'
+    )->execute([
+        $customerId,
+        $selector,
+        hash('sha256', $validator),
+        (new DateTime('+' . CLAIM_TOKEN_DAYS . ' days'))->format('Y-m-d H:i:s'),
+    ]);
+    return $selector . '.' . $validator;
+}
+
+/** Verify and BURN a claim token. Returns the customer id, or null if invalid. */
+function consume_claim_token(string $token): ?int
+{
+    if (!str_contains($token, '.')) {
+        return null;
+    }
+    [$selector, $validator] = explode('.', $token, 2);
+    $stmt = db()->prepare('SELECT * FROM customer_tokens WHERE selector = ? AND expires_at > NOW()');
+    $stmt->execute([$selector]);
+    $row = $stmt->fetch();
+    if (!$row || !hash_equals($row['validator_hash'], hash('sha256', $validator))) {
+        return null;
+    }
+    // Single use: burn it before granting the session.
+    db()->prepare('DELETE FROM customer_tokens WHERE id = ?')->execute([(int)$row['id']]);
+    return (int)$row['customer_id'];
+}
+
 function logout_customer(): void
 {
     customer_session_start();

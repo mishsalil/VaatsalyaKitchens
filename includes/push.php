@@ -41,25 +41,47 @@ function push_send(array $subscriptionRows, string $title, string $body, string 
         'icon'  => $cfg['base_url'] . '/assets/icon-192.png',
     ], JSON_UNESCAPED_UNICODE);
 
-    foreach ($subscriptionRows as $row) {
-        $webPush->queueNotification(Subscription::create([
-            'endpoint' => $row['endpoint'],
-            'keys'     => ['p256dh' => $row['p256dh'], 'auth' => $row['auth_key']],
-        ]), $payload);
-    }
-
     $sent = 0;
     $failed = 0;
-    foreach ($webPush->flush() as $report) {
-        if ($report->isSuccess()) {
-            $sent++;
-            continue;
+
+    // A row with a corrupt p256dh/auth makes the library throw (TypeError from
+    // deep inside its encryption), so queue each one defensively — one bad
+    // subscription must not stop the others being notified.
+    $queued = 0;
+    foreach ($subscriptionRows as $row) {
+        try {
+            $webPush->queueNotification(Subscription::create([
+                'endpoint' => $row['endpoint'],
+                'keys'     => ['p256dh' => $row['p256dh'], 'auth' => $row['auth_key']],
+            ]), $payload);
+            $queued++;
+        } catch (Throwable $e) {
+            $failed++;
+            error_log('push: skipping unusable subscription ' . ($row['endpoint'] ?? '?') . ' — ' . $e->getMessage());
         }
-        $failed++;
-        if ($report->isSubscriptionExpired()) {
-            db()->prepare('DELETE FROM push_subscriptions WHERE endpoint = ?')
-                ->execute([$report->getEndpoint()]);
+    }
+    if ($queued === 0) {
+        return [0, $failed];
+    }
+
+    // Never let a delivery problem break the caller. Order status updates call
+    // this AFTER committing the status change, so an exception here would 500 a
+    // request whose real work already succeeded.
+    try {
+        foreach ($webPush->flush() as $report) {
+            if ($report->isSuccess()) {
+                $sent++;
+                continue;
+            }
+            $failed++;
+            if ($report->isSubscriptionExpired()) {
+                db()->prepare('DELETE FROM push_subscriptions WHERE endpoint = ?')
+                    ->execute([$report->getEndpoint()]);
+            }
         }
+    } catch (Throwable $e) {
+        error_log('push: flush failed — ' . $e->getMessage());
+        $failed += $queued - $sent;
     }
     return [$sent, $failed];
 }

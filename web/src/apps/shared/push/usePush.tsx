@@ -18,7 +18,7 @@ interface PushContextValue {
   isDismissed: (surface: PushSurface) => boolean;
 }
 
-export type PushSurface = 'home' | 'order' | 'success' | 'account';
+export type PushSurface = 'home' | 'order' | 'success' | 'account' | 'claim';
 
 const DISMISS_KEY = 'vk-push-dismissed';
 

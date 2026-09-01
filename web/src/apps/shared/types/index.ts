@@ -161,6 +161,11 @@ export interface OrderListItem {
   cgst: number;
   sgst: number;
   gst_rate: number;
+  /** Counter billing snapshot (migration_006). All 0/false for customer orders. */
+  discount_pct: number;
+  discount_amount: number;
+  delivery_charge: number;
+  is_complimentary: boolean;
   created_at: string;
   branch_name: string | null;
   items: OrderItem[];

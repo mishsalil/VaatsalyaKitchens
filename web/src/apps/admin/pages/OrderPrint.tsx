@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Printer } from 'lucide-react';
-import { adminOrdersApi, adminSettingsApi } from '../api/endpoints';
+import { adminOrdersApi } from '../api/endpoints';
+import { useAdminAuth } from '../context/AdminAuthContext';
 import { rupees, displayPhone } from '../../shared/lib/format';
 import { StatusBadge } from '../../shared/components/StatusBadge';
+import { lineLabel } from '../../shared/types';
 import type { AdminOrder } from '../types';
-import type { AdminSettingsFull } from '../types';
 
 /** Printable A4 receipt at /admin/orders/:id/print. Rendered OUTSIDE AdminLayout
  *  so the sidebar doesn't print; the small toolbar is hidden via `print:hidden`. */
@@ -14,19 +15,20 @@ export function AdminOrderPrint() {
   const navigate = useNavigate();
   const orderId = Number(id);
 
+  // The letterhead comes from /admin/me (already bootstrapped) rather than
+  // /admin/settings, which is gated on the `settings` cap that staff lack.
+  const { settings: adminSettings } = useAdminAuth();
+  const settings = adminSettings?.print_header ?? null;
+  const logoPath = settings?.logo_path ?? null;
+
   const [order, setOrder] = useState<AdminOrder | null>(null);
-  const [settings, setSettings] = useState<AdminSettingsFull | null>(null);
-  const [logoPath, setLogoPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!orderId) return;
-    Promise.all([adminOrdersApi.show(orderId), adminSettingsApi.get()])
-      .then(([o, s]) => {
-        setOrder(o.order);
-        setSettings(s.settings);
-        setLogoPath(s.settings.logo_path);
-      })
+    adminOrdersApi
+      .show(orderId)
+      .then((o) => setOrder(o.order))
       .catch((e) => setError((e as Error).message));
   }, [orderId]);
 
@@ -38,7 +40,17 @@ export function AdminOrderPrint() {
   }
 
   const placed = new Date(order.created_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const roundOff = Math.round((order.total_estimate - order.subtotal - order.cgst - order.sgst) * 100) / 100;
+  // Round-off is whatever the stored total doesn't account for once every other
+  // billed line is subtracted (discount and delivery included, per migration_006).
+  const roundOff =
+    Math.round(
+      (order.total_estimate -
+        (order.subtotal - order.discount_amount) -
+        order.cgst -
+        order.sgst -
+        order.delivery_charge) *
+        100,
+    ) / 100;
 
   return (
     <div className="min-h-dvh bg-cream-100 print:bg-white">
@@ -130,7 +142,8 @@ export function AdminOrderPrint() {
               {order.items.map((it, i) => (
                 <tr key={i} className="border-b border-cream-100">
                   <td className="py-2 text-brand-900">
-                    {it.item_name} <span className="text-brand-400">({it.unit})</span>
+                    {lineLabel(it.item_name, it.variant_name, it.addons_text)}
+                    {it.unit ? <span className="ml-1 text-brand-400">({it.unit})</span> : null}
                   </td>
                   <td className="py-2 text-center text-brand-700">{it.qty}</td>
                   <td className="py-2 text-right text-brand-700">{rupees(it.price)}</td>
@@ -141,12 +154,20 @@ export function AdminOrderPrint() {
           </table>
           <div className="mt-3 flex justify-end">
             <div className="w-full max-w-xs space-y-1">
-              {order.gst_rate > 0 && (
+              {(order.gst_rate > 0 || order.discount_amount > 0 || order.delivery_charge > 0) && (
+                <div className="flex items-center justify-between text-sm text-brand-600">
+                  <span>Subtotal</span>
+                  <span>{rupees(order.subtotal)}</span>
+                </div>
+              )}
+              {order.discount_amount > 0 && (
+                <div className="flex items-center justify-between text-sm text-brand-600">
+                  <span>Discount ({order.discount_pct}%)</span>
+                  <span>− {rupees(order.discount_amount)}</span>
+                </div>
+              )}
+              {!order.is_complimentary && order.gst_rate > 0 && (
                 <>
-                  <div className="flex items-center justify-between text-sm text-brand-600">
-                    <span>Subtotal</span>
-                    <span>{rupees(order.subtotal)}</span>
-                  </div>
                   <div className="flex items-center justify-between text-sm text-brand-600">
                     <span>CGST ({order.gst_rate / 2}%)</span>
                     <span>{rupees(order.cgst)}</span>
@@ -155,18 +176,29 @@ export function AdminOrderPrint() {
                     <span>SGST ({order.gst_rate / 2}%)</span>
                     <span>{rupees(order.sgst)}</span>
                   </div>
-                  {roundOff > 0 && (
-                    <div className="flex items-center justify-between text-sm text-brand-600">
-                      <span>Round off</span>
-                      <span>+{rupees(roundOff)}</span>
-                    </div>
-                  )}
                 </>
+              )}
+              {order.delivery_charge > 0 && (
+                <div className="flex items-center justify-between text-sm text-brand-600">
+                  <span>Delivery</span>
+                  <span>{rupees(order.delivery_charge)}</span>
+                </div>
+              )}
+              {roundOff > 0 && !order.is_complimentary && (
+                <div className="flex items-center justify-between text-sm text-brand-600">
+                  <span>Round off</span>
+                  <span>+{rupees(roundOff)}</span>
+                </div>
               )}
               <div className="flex items-center justify-between border-t-2 border-brand-900 pt-2 text-base font-bold text-brand-900">
                 <span>Total</span>
-                <span>{rupees(order.total_estimate)}</span>
+                <span>{order.is_complimentary ? 'COMPLIMENTARY' : rupees(order.total_estimate)}</span>
               </div>
+              {order.is_complimentary && (
+                <p className="pt-1 text-right text-xs font-semibold uppercase tracking-wide text-gold-700">
+                  No payment due
+                </p>
+              )}
             </div>
           </div>
         </section>

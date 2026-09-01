@@ -36,3 +36,64 @@ function compute_gst(float $subtotal, float $rate): array
         'rate'      => $rate,
     ];
 }
+
+/* Counter billing — compute_gst plus the three adjustments a rep can make at the
+   till (migration_006). Mirrored by web/src/apps/shared/lib/gst.ts.
+
+     discount_amount = round(subtotal * pct/100, 2)
+     taxable         = subtotal - discount_amount   (GST is charged on this,
+                                                     never the pre-discount sum)
+     delivery        = added AFTER tax (not taxed here)
+     total           = ceil(taxable + cgst + sgst + delivery)
+
+   Complimentary zeroes every billable line — cgst, sgst, delivery and total —
+   while keeping `subtotal` and `discount_amount` as the notional value of what
+   was given away, so comps stay reportable.
+
+   Customer checkout keeps calling compute_gst() directly: discounts and delivery
+   charges are counter-only, so that path is deliberately unchanged. */
+function compute_order_total(
+    float $subtotal,
+    float $rate,
+    float $discountPct = 0.0,
+    float $deliveryCharge = 0.0,
+    bool $isComplimentary = false
+): array {
+    $subtotal = round(max(0.0, $subtotal), 2);
+    $discountPct = min(100.0, max(0.0, $discountPct));
+    $deliveryCharge = round(max(0.0, $deliveryCharge), 2);
+    $discountAmount = round($subtotal * $discountPct / 100.0, 2);
+    $taxable = round($subtotal - $discountAmount, 2);
+
+    if ($isComplimentary) {
+        return [
+            'subtotal'        => $subtotal,
+            'discount_pct'    => $discountPct,
+            'discount_amount' => $discountAmount,
+            'cgst'            => 0.0,
+            'sgst'            => 0.0,
+            'delivery_charge' => 0.0,
+            'round_off'       => 0.0,
+            'total'           => 0.0,
+            'rate'            => max(0.0, $rate),
+            'complimentary'   => true,
+        ];
+    }
+
+    $gst = compute_gst($taxable, $rate);
+    $exact = round($taxable + $gst['cgst'] + $gst['sgst'] + $deliveryCharge, 2);
+    $total = (int) ceil($exact - 0.0001);
+
+    return [
+        'subtotal'        => $subtotal,
+        'discount_pct'    => $discountPct,
+        'discount_amount' => $discountAmount,
+        'cgst'            => $gst['cgst'],
+        'sgst'            => $gst['sgst'],
+        'delivery_charge' => $deliveryCharge,
+        'round_off'       => round($total - $exact, 2),
+        'total'           => (float)$total,
+        'rate'            => $gst['rate'],
+        'complimentary'   => false,
+    ];
+}

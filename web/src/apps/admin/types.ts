@@ -15,6 +15,21 @@ export interface AdminSettings {
   kitchen_email: string;
   base_url: string;
   push_configured: boolean;
+  /** Tax-exclusive GST rate (percent) — drives the New Order cart preview. */
+  gst_rate: string;
+  /** Receipt letterhead, readable by every role (unlike /admin/settings). */
+  print_header: AdminPrintHeader;
+}
+
+/** Branding shown at the top of a printed receipt. */
+export interface AdminPrintHeader {
+  kitchen_name: string;
+  kitchen_address: string;
+  kitchen_phone_display: string;
+  kitchen_email: string;
+  gstin: string;
+  print_footer: string;
+  logo_path: string | null;
 }
 
 export interface AdminMeResponse {
@@ -45,6 +60,11 @@ export interface AdminOrderListItem {
   cgst: number;
   sgst: number;
   gst_rate: number;
+  /** Counter billing snapshot (migration_006). All 0/false for customer orders. */
+  discount_pct: number;
+  discount_amount: number;
+  delivery_charge: number;
+  is_complimentary: boolean;
   created_at: string;
   customer_id: number | null;
   branch_id: number | null;

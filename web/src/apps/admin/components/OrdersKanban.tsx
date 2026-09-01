@@ -103,7 +103,13 @@ export function OrdersKanban({ orders, onSelect, selectedId }: Props) {
                         <span className="inline-flex items-center gap-1 text-xs text-brand-500">
                           <ClipboardList className="h-3.5 w-3.5" /> {o.item_count}
                         </span>
-                        <span className="text-sm font-bold text-brand-900">{rupees(o.total_estimate)}</span>
+                        {o.is_complimentary ? (
+                          <span className="rounded-full bg-gold-100 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-gold-800">
+                            Comp
+                          </span>
+                        ) : (
+                          <span className="text-sm font-bold text-brand-900">{rupees(o.total_estimate)}</span>
+                        )}
                       </div>
                       <p className="mt-1.5 truncate text-[11px] text-brand-400">Needed: {o.needed_on}</p>
                     </button>

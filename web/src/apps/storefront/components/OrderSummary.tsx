@@ -23,7 +23,7 @@ export function OrderSummary() {
               <span className="flex-1">
                 {lineLabel(l.name, l.variant?.name, l.addons.map((a) => a.name).join(', ') || undefined)}{' '}
                 <span className="text-brand-400">×{l.qty}</span>
-                <span className="ml-1 text-sm text-brand-400">({l.unit})</span>
+                {l.unit ? <span className="ml-1 text-sm text-brand-400">({l.unit})</span> : null}
               </span>
               <span className="font-medium">{rupees(unit * l.qty)}</span>
               <button

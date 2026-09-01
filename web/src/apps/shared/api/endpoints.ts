@@ -12,6 +12,8 @@ export const menuApi = {
 export const authApi = {
   login: (phone: string, pin: string) => api.post('auth/login', { phone, pin }),
   logout: () => api.post('auth/logout', {}),
+  /** Redeem a one-time claim link from a counter order (single use). */
+  claim: (token: string) => api.post('auth/claim', { token }),
 };
 
 export const ordersApi = {

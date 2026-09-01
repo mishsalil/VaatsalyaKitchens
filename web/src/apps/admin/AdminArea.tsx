@@ -1,10 +1,11 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { AdminAuthProvider } from './context/AdminAuthContext';
+import { AdminAuthProvider, useAdminAuth } from './context/AdminAuthContext';
 import { RequireAdminAuth } from './components/RequireAdminAuth';
 import { RequireCap } from './components/RequireCap';
 import { AdminLayout } from './layout/AdminLayout';
 import { AdminLogin } from './pages/Login';
 import { AdminDashboard } from './pages/Dashboard';
+import { AdminNewOrder } from './pages/NewOrder';
 import { AdminOrders } from './pages/Orders';
 import { AdminMenu } from './pages/Menu';
 import { AdminCustomers } from './pages/Customers';
@@ -23,6 +24,17 @@ import { AdminOrderPrint } from './pages/OrderPrint';
  * server-side cap check in /api/admin/*). The print route is full-bleed (no
  * sidebar) but still cap-gated to `print`, which every role has.
  */
+/**
+ * Where /admin lands. Order entry is the highest-frequency job in the kitchen
+ * (100-200x/day against a dashboard glanced at once), so it owns the default
+ * route for everyone who can take orders. Riders lack `new_order` and keep the
+ * dashboard — routing them at it directly avoids a pointless denied-access toast.
+ */
+function AdminHome() {
+  const { can } = useAdminAuth();
+  return <Navigate to={can('new_order') ? 'new-order' : 'dashboard'} replace />;
+}
+
 export default function AdminArea() {
   return (
     <AdminAuthProvider>
@@ -35,7 +47,8 @@ export default function AdminArea() {
             </RequireAdminAuth>
           }
         >
-          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route index element={<AdminHome />} />
+          <Route path="new-order" element={<RequireCap cap="new_order"><AdminNewOrder /></RequireCap>} />
           <Route path="dashboard" element={<RequireCap cap="dashboard"><AdminDashboard /></RequireCap>} />
           <Route path="orders" element={<RequireCap cap="orders"><AdminOrders /></RequireCap>} />
           <Route path="menu" element={<RequireCap cap="menu"><AdminMenu /></RequireCap>} />
@@ -55,7 +68,7 @@ export default function AdminArea() {
             </RequireAdminAuth>
           }
         />
-        <Route path="*" element={<Navigate to="dashboard" replace />} />
+        <Route path="*" element={<AdminHome />} />
       </Routes>
     </AdminAuthProvider>
   );

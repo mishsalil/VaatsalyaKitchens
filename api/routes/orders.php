@@ -189,6 +189,7 @@ function route($method, $action, $parts): void
         $stmt = db()->prepare(
             'SELECT o.id, o.occasion, o.needed_on, o.address_text, o.status,
                     o.total_estimate, o.subtotal, o.cgst, o.sgst, o.gst_rate,
+                    o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
                     o.created_at, b.name AS branch_name
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id
@@ -207,6 +208,10 @@ function route($method, $action, $parts): void
             $o['cgst']      = (float)$o['cgst'];
             $o['sgst']      = (float)$o['sgst'];
             $o['gst_rate']  = (float)$o['gst_rate'];
+            $o['discount_pct']     = (float)$o['discount_pct'];
+            $o['discount_amount']  = (float)$o['discount_amount'];
+            $o['delivery_charge']  = (float)$o['delivery_charge'];
+            $o['is_complimentary'] = (bool)$o['is_complimentary'];
             foreach ($o['items'] as &$it) {
                 $it['price'] = (float)$it['price'];
             }
@@ -226,8 +231,9 @@ function route($method, $action, $parts): void
         $stmt = db()->prepare(
             'SELECT o.id, o.name, o.phone, o.occasion, o.needed_on, o.address_text,
                     o.lat, o.lng, o.notes, o.status, o.total_estimate,
-                    o.subtotal, o.cgst, o.sgst, o.gst_rate, o.created_at,
-                    b.name AS branch_name
+                    o.subtotal, o.cgst, o.sgst, o.gst_rate,
+                    o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.created_at, b.name AS branch_name
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id
               WHERE o.id = ? AND o.customer_id = ?'
@@ -249,6 +255,10 @@ function route($method, $action, $parts): void
         $order['cgst']     = (float)$order['cgst'];
         $order['sgst']     = (float)$order['sgst'];
         $order['gst_rate'] = (float)$order['gst_rate'];
+        $order['discount_pct']     = (float)$order['discount_pct'];
+        $order['discount_amount']  = (float)$order['discount_amount'];
+        $order['delivery_charge']  = (float)$order['delivery_charge'];
+        $order['is_complimentary'] = (bool)$order['is_complimentary'];
         $order['items'] = $items;
         Response::json(['order' => $order]);
     }

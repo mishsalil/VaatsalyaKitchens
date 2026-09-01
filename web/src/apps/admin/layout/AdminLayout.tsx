@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, UtensilsCrossed, Users, Bell, Settings as SettingsIcon,
-  LogOut, Menu, X, KeyRound, UserCog,
+  LogOut, Menu, X, KeyRound, UserCog, PlusCircle,
 } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { can, type AdminCap, roleLabel } from '../rbac';
@@ -10,9 +10,13 @@ import { ChangePasswordModal } from '../components/ChangePasswordModal';
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; cap: AdminCap };
 
+// Ordered by how often the job is actually done: order entry runs 100-200x a
+// day, the board is watched all shift, the dashboard is a once-a-day glance and
+// the rest are edited once or twice a month.
 const NAV: NavItem[] = [
-  { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, cap: 'dashboard' },
+  { to: '/admin/new-order', label: 'New Order', icon: PlusCircle, cap: 'new_order' },
   { to: '/admin/orders', label: 'Orders', icon: ClipboardList, cap: 'orders' },
+  { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, cap: 'dashboard' },
   { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, cap: 'menu' },
   { to: '/admin/customers', label: 'Customers', icon: Users, cap: 'customers' },
   { to: '/admin/broadcast', label: 'Broadcast', icon: Bell, cap: 'broadcast' },

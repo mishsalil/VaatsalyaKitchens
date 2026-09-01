@@ -42,6 +42,41 @@ function route($method, $action, $parts): void
         Response::error('That phone number and PIN do not match. Please try again.', 401);
     }
 
+    /* Redeem a one-time claim link issued at the counter. Signs this device in
+       and burns the token, so the link works exactly once. No PIN is set here —
+       the customer lands on /account, where the normal PIN setup is offered. */
+    if ($action === 'claim') {
+        if ($method !== 'POST') {
+            Response::error('Method not allowed', 405);
+        }
+        customer_session_start();
+        require_csrf_api($_POST);
+
+        $token = trim((string)($_POST['token'] ?? ''));
+        if ($token === '') {
+            Response::error('This link is not valid.');
+        }
+        if (too_many_attempts('claim:' . substr($token, 0, 24))) {
+            Response::error('Too many tries. Please wait 15 minutes and try again, or call us.', 429);
+        }
+        $customerId = consume_claim_token($token);
+        if ($customerId === null) {
+            record_attempt('claim:' . substr($token, 0, 24));
+            Response::error('This link has expired or has already been used. Please call us for a new one.', 401);
+        }
+        $customer = find_customer($customerId);
+        if (!$customer) {
+            Response::error('This link is not valid.', 401);
+        }
+        login_customer($customerId);
+        Response::json(['user' => [
+            'id'      => (int)$customer['id'],
+            'name'    => $customer['name'],
+            'phone'   => $customer['phone'],
+            'has_pin' => $customer['pin_hash'] !== null,
+        ]]);
+    }
+
     if ($action === 'logout') {
         if ($method !== 'POST') {
             Response::error('Method not allowed', 405);

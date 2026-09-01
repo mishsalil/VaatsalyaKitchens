@@ -8,7 +8,10 @@
    already does SELECT *, so the column flows through with no query changes.
 
    Capability strings:
-     dashboard  orders  menu  customers  broadcast  settings  roles  print
+     dashboard  orders  new_order  menu  customers  broadcast  settings  roles  print
+   `new_order` is counter order-entry (POST orders/create). Staff have it — they
+   are the counter reps — but riders deliberately do not: a rider may view the
+   board and mark Delivered, never open an order.
    "change own password" is intentionally NOT a cap — it is self-service for
    every signed-in admin (handled in settings.php::change_password, no cap).
    The rider's "can only mark Delivered" restriction is NOT a cap either — it
@@ -44,10 +47,10 @@ function admin_role_valid(string $role): bool
 function admin_caps_for_role(string $role): array
 {
     return match ($role) {
-        'super'   => ['dashboard', 'orders', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print'],
-        'admin'   => ['dashboard', 'orders', 'menu', 'customers', 'broadcast', 'settings', 'print'],
-        'manager' => ['dashboard', 'orders', 'menu', 'broadcast', 'print'],
-        'staff'   => ['dashboard', 'orders', 'print'],
+        'super'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print'],
+        'admin'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'print'],
+        'manager' => ['dashboard', 'orders', 'new_order', 'menu', 'broadcast', 'print'],
+        'staff'   => ['dashboard', 'orders', 'new_order', 'print'],
         'rider'   => ['dashboard', 'orders', 'print'],
         default   => ['dashboard'],
     };

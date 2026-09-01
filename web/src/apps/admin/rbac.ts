@@ -9,6 +9,8 @@ export type AdminRole = 'super' | 'admin' | 'manager' | 'staff' | 'rider';
 export type AdminCap =
   | 'dashboard'
   | 'orders'
+  /** Counter order entry. Staff have it; riders deliberately do not. */
+  | 'new_order'
   | 'menu'
   | 'customers'
   | 'broadcast'
@@ -28,10 +30,10 @@ export const ROLE_LABELS: Record<AdminRole, string> = {
 };
 
 const CAPS_BY_ROLE: Record<AdminRole, AdminCap[]> = {
-  super: ['dashboard', 'orders', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print'],
-  admin: ['dashboard', 'orders', 'menu', 'customers', 'broadcast', 'settings', 'print'],
-  manager: ['dashboard', 'orders', 'menu', 'broadcast', 'print'],
-  staff: ['dashboard', 'orders', 'print'],
+  super: ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print'],
+  admin: ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'print'],
+  manager: ['dashboard', 'orders', 'new_order', 'menu', 'broadcast', 'print'],
+  staff: ['dashboard', 'orders', 'new_order', 'print'],
   rider: ['dashboard', 'orders', 'print'],
 };
 

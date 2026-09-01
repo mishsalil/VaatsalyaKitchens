@@ -16,9 +16,10 @@ export function AdminLogin() {
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // Already signed in — go straight to the dashboard.
+  // Already signed in — /admin picks the right landing for the role
+  // (New Order for anyone who can take orders, Dashboard for riders).
   if (admin) {
-    return <Navigate to="/admin/dashboard" replace />;
+    return <Navigate to="/admin" replace />;
   }
 
   const submit = async (e: FormEvent) => {
@@ -31,7 +32,7 @@ export function AdminLogin() {
     setBusy(true);
     try {
       await login(username.trim(), password);
-      navigate('/admin/dashboard', { replace: true });
+      navigate('/admin', { replace: true });
     } catch (err) {
       setFormError((err as Error).message || 'Could not sign in.');
     } finally {
