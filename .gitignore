@@ -3,3 +3,6 @@ includes/config.php
 
 # local curl/test cookie jars
 .test-cookies*.txt
+
+# machine-local plugin state (neural stats, policy cache)
+.claude-flow/
