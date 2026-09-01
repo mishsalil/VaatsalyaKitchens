@@ -90,6 +90,7 @@ export function OrderSuccess() {
       <CancelCountdown
         orderId={order.id}
         secondsLeft={order.cancel_seconds_left}
+        requestedAt={order.cancel_requested_at}
         onCancelled={() => refetch()}
       />
 

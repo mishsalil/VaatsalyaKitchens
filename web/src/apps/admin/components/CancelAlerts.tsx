@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, Volume2, VolumeX } from 'lucide-react';
+import { AlertTriangle, Check, X, Volume2, VolumeX } from 'lucide-react';
 import { adminOrdersApi } from '../api/endpoints';
 import { useToast } from '../../shared/context/ToastContext';
 import type { AdminOrderListItem } from '../types';
@@ -72,7 +72,12 @@ export function CancelAlerts({
     try { return localStorage.getItem(SOUND_KEY) === '1'; } catch { return false; }
   });
 
-  const pending = orders.filter((o) => o.status === 'cancelled' && !o.cancel_acked_at);
+  /* Two things land here: a customer REQUEST still waiting on the kitchen (the
+     order is not cancelled yet — confirming is what cancels it), and a
+     rep-cancelled order whose kitchen has not been told. Both need a human. */
+  const pending = orders.filter(
+    (o) => !o.cancel_acked_at && (o.cancel_requested_at !== null || o.status === 'cancelled'),
+  );
   useAlarm(pending.length > 0, soundOn);
 
   const toggleSound = () => {
@@ -89,7 +94,20 @@ export function CancelAlerts({
     setBusyId(id);
     try {
       await adminOrdersApi.ackCancel(id);
-      toast.info(`Order #${id} — kitchen confirmed.`);
+      toast.info(`Order #${id} — cancelled and confirmed.`);
+      onAcked();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const reject = async (id: number) => {
+    setBusyId(id);
+    try {
+      await adminOrdersApi.rejectCancel(id);
+      toast.info(`Order #${id} stays — the customer has been told.`);
       onAcked();
     } catch (e) {
       toast.error((e as Error).message);
@@ -129,7 +147,14 @@ export function CancelAlerts({
           >
             <span className="font-semibold text-brand-900">#{o.id}</span>
             <span className="min-w-0 flex-1 truncate text-sm text-brand-700">
-              {o.name} · {o.needed_on}
+              {o.cancel_requested_at && o.status !== 'cancelled' ? (
+                <>
+                  <span className="font-semibold text-red-700">Customer asked to cancel</span> ·{' '}
+                  {o.name} · {o.needed_on}
+                </>
+              ) : (
+                <>{o.name} · {o.needed_on}</>
+              )}
             </span>
             <button
               type="button"
@@ -138,8 +163,24 @@ export function CancelAlerts({
               className="inline-flex items-center gap-1.5 rounded-full bg-brand-900 px-3 py-1.5 text-xs font-semibold text-cream-50 hover:bg-brand-800 disabled:opacity-60"
             >
               <Check className="h-3.5 w-3.5" />
-              {busyId === o.id ? 'Saving…' : "I've told the kitchen"}
+              {busyId === o.id
+                ? 'Saving…'
+                : o.cancel_requested_at && o.status !== 'cancelled'
+                  ? 'Kitchen stopped it — cancel'
+                  : "I've told the kitchen"}
             </button>
+            {/* Only a pending request can be declined; a rep-cancelled order is
+                already cancelled and there is nothing to say no to. */}
+            {o.cancel_requested_at && o.status !== 'cancelled' && (
+              <button
+                type="button"
+                onClick={() => reject(o.id)}
+                disabled={busyId === o.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-cream-100 disabled:opacity-60"
+              >
+                <X className="h-3.5 w-3.5" /> Already cooked
+              </button>
+            )}
           </li>
         ))}
       </ul>

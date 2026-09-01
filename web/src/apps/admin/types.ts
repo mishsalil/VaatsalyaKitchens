@@ -68,6 +68,12 @@ export interface AdminOrderListItem {
   /** Set once a rep confirms the kitchen was told about a cancellation (migration_008). */
   cancel_acked_at: string | null;
   cancel_acked_label: string | null;
+  /**
+   * A customer asked to cancel and is waiting (migration_009). The order keeps
+   * its real status until a rep confirms — confirming is what cancels it.
+   */
+  cancel_requested_at: string | null;
+  cancel_requested_label: string | null;
   created_at: string;
   customer_id: number | null;
   branch_id: number | null;

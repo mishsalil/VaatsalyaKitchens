@@ -100,8 +100,7 @@ function route($method, $action, $parts): void
             'SELECT o.id, o.name, o.phone, o.occasion, o.needed_on, o.address_text,
                     o.status, o.total_estimate, o.subtotal, o.cgst, o.sgst, o.gst_rate,
                     o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
-                    o.cancel_acked_at, o.cancel_acked_label,
-                    o.cancel_acked_at, o.cancel_acked_label,
+                    o.cancel_acked_at, o.cancel_acked_label, o.cancel_requested_at, o.cancel_requested_label,
                     o.created_at, o.customer_id, o.branch_id,
                     b.name AS branch_name,
                     (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) AS item_count
@@ -183,9 +182,8 @@ function route($method, $action, $parts): void
             'SELECT o.id, o.customer_id, o.name, o.phone, o.occasion, o.needed_on,
                     o.address_text, o.lat, o.lng, o.notes, o.status, o.total_estimate,
                     o.subtotal, o.cgst, o.sgst, o.gst_rate,
-                    o.cancel_acked_at, o.cancel_acked_label,
+                    o.cancel_acked_at, o.cancel_acked_label, o.cancel_requested_at, o.cancel_requested_label,
                     o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
-                    o.cancel_acked_at, o.cancel_acked_label,
                     o.created_at, o.branch_id, b.name AS branch_name
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id
@@ -517,17 +515,31 @@ function route($method, $action, $parts): void
     if ($action === 'ack_cancel' && $method === 'POST') {
         require_csrf_api($_POST);
         $id = (int)($parts[3] ?? 0);
-        $stmt = db()->prepare('SELECT id, customer_id, status, cancel_acked_at FROM orders WHERE id = ?');
+        $stmt = db()->prepare(
+            'SELECT id, customer_id, status, cancel_acked_at, cancel_requested_at FROM orders WHERE id = ?'
+        );
         $stmt->execute([$id]);
         $order = $stmt->fetch();
         if (!$order) {
             Response::error('Order not found.', 404);
         }
-        if ($order['status'] !== 'cancelled') {
-            Response::error('This order is not cancelled.');
+        $wasRequested = $order['cancel_requested_at'] !== null;
+        if ($order['status'] !== 'cancelled' && !$wasRequested) {
+            Response::error('This order is not cancelled and no cancellation was requested.');
         }
         if ($order['cancel_acked_at'] !== null) {
             Response::error('Someone has already confirmed this one.');
+        }
+
+        /* A customer request is only APPLIED here — this is the moment the
+           kitchen has actually stopped, so it is also the moment the order
+           really becomes cancelled. A rep-initiated cancellation is already
+           cancelled; confirming only records that the kitchen was told. */
+        if ($wasRequested && $order['status'] !== 'cancelled') {
+            db()->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute(['cancelled', $id]);
+            log_order_event($id, 'admin', (int)$admin['id'], (string)$admin['username'], 'cancelled', [
+                'from' => $order['status'], 'via' => 'customer_request',
+            ]);
         }
         db()->prepare(
             'UPDATE orders SET cancel_acked_at = NOW(), cancel_acked_by = ?, cancel_acked_label = ?
@@ -552,6 +564,47 @@ function route($method, $action, $parts): void
             'acked_by' => (string)$admin['username'],
             'customer_notified' => (int)$pushSent,
         ]);
+    }
+
+    /* --- decline a cancellation request ---
+       The kitchen may already have cooked it. Without this, a request has only
+       one possible outcome, which makes it a delay rather than a request, and a
+       rep who cannot say no simply never clicks — leaving it pending forever. */
+    if ($action === 'reject_cancel' && $method === 'POST') {
+        require_csrf_api($_POST);
+        $id = (int)($parts[3] ?? 0);
+        $reason = mb_substr(trim((string)($_POST['reason'] ?? '')), 0, 200);
+        $stmt = db()->prepare('SELECT id, customer_id, status, cancel_requested_at FROM orders WHERE id = ?');
+        $stmt->execute([$id]);
+        $order = $stmt->fetch();
+        if (!$order) {
+            Response::error('Order not found.', 404);
+        }
+        if ($order['cancel_requested_at'] === null) {
+            Response::error('There is no cancellation request on this order.');
+        }
+        if ($order['status'] === 'cancelled') {
+            Response::error('This order is already cancelled.');
+        }
+        db()->prepare(
+            'UPDATE orders SET cancel_requested_at = NULL, cancel_requested_by = NULL,
+                               cancel_requested_label = NULL
+              WHERE id = ?'
+        )->execute([$id]);
+        log_order_event($id, 'admin', (int)$admin['id'], (string)$admin['username'], 'cancel_declined',
+            $reason !== '' ? ['reason' => $reason] : []);
+
+        $pushSent = 0;
+        if ((int)$order['customer_id'] > 0) {
+            $cfg = config();
+            [$pushSent] = push_send_to_customer(
+                (int)$order['customer_id'],
+                'Order #' . $id . ' could not be cancelled',
+                $reason !== '' ? $reason : 'Your food is already being prepared. Please call us and we will help.',
+                $cfg['base_url'] . '/account'
+            );
+        }
+        Response::json(['ok' => true, 'customer_notified' => (int)$pushSent]);
     }
 
     // --- update status (with customer push) ---

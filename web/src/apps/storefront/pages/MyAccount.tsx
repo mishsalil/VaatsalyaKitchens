@@ -91,11 +91,12 @@ export function MyAccount() {
                     <p className="mt-1 text-xs text-brand-400">
                       Needed on: {o.needed_on} · {o.address_text ? 'Delivery' : 'Pickup'}
                     </p>
-                    {o.cancel_seconds_left > 0 && (
+                    {(o.cancel_seconds_left > 0 || o.cancel_requested_at) && (
                       <div className="mt-3">
                         <CancelCountdown
                           orderId={o.id}
                           secondsLeft={o.cancel_seconds_left}
+                          requestedAt={o.cancel_requested_at}
                           onCancelled={() => orders.refetch()}
                         />
                       </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { adminOrdersApi } from '../api/endpoints';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { Skeleton } from '../../shared/components/Skeleton';
@@ -6,10 +6,20 @@ import { OrdersKanban } from '../components/OrdersKanban';
 import { OrderDrawer } from '../components/OrderDrawer';
 import { ImportExportBar } from '../components/ImportExportBar';
 import { CancelAlerts } from '../components/CancelAlerts';
+import { StaffAlerts } from '../components/StaffAlerts';
 
 export function AdminOrders() {
   const { data, loading, error, refetch } = useFetch(() => adminOrdersApi.list(), []);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+
+  /* Poll the board. A customer can request a cancellation at any moment and the
+     kitchen needs to see it without anyone thinking to hit Refresh — the whole
+     point of the alert is that it arrives on its own. Silent refetch (no
+     spinner) so the board doesn't flicker every 15s. */
+  useEffect(() => {
+    const t = setInterval(() => refetch(), 15000);
+    return () => clearInterval(t);
+  }, [refetch]);
 
   const orders = data?.orders ?? [];
 
@@ -47,6 +57,9 @@ export function AdminOrders() {
           <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
         ) : (
           <>
+            {/* Unmissable if this device isn't registered — the alerts are the
+                point, and a silently-unsubscribed counter is the failure mode. */}
+            <StaffAlerts variant="banner" />
             {/* Cancellations the kitchen may not know about yet — above the board. */}
             <CancelAlerts orders={orders} onAcked={() => refetch()} />
             <OrdersKanban orders={orders} onSelect={setSelectedId} selectedId={selectedId ?? undefined} />

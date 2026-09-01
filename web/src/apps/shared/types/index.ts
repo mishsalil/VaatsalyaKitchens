@@ -172,6 +172,12 @@ export interface OrderListItem {
    * The server is the authority — this only drives the countdown UI.
    */
   cancel_seconds_left: number;
+  /**
+   * Set when the customer has asked to cancel and the kitchen has not yet
+   * confirmed (migration_009). The order is NOT cancelled while this is set —
+   * `status` still reflects reality, because the food may still be cooking.
+   */
+  cancel_requested_at: string | null;
   created_at: string;
   branch_name: string | null;
   items: OrderItem[];

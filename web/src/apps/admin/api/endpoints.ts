@@ -84,9 +84,12 @@ export const adminOrdersApi = {
     adminApi.post(`orders/update/${id}`, data) as Promise<{
       ok: true; order_id: number; total: number; complimentary: boolean;
     }>,
-  /** Confirm a rep has told the kitchen about a cancellation. */
+  /** Confirm with the kitchen — also applies a pending customer request. */
   ackCancel: (id: number) =>
-    adminApi.post(`orders/ack_cancel/${id}`, {}) as Promise<{ ok: true; acked_by: string }>,
+    adminApi.post(`orders/ack_cancel/${id}`, {}) as Promise<{ ok: true; acked_by: string; customer_notified: number }>,
+  /** Decline a customer's cancellation request (food already cooked). */
+  rejectCancel: (id: number, reason?: string) =>
+    adminApi.post(`orders/reject_cancel/${id}`, reason ? { reason } : {}) as Promise<{ ok: true; customer_notified: number }>,
   /** Mint a single-use claim link so a counter customer can sign in on their phone. */
   claimLink: (orderId: number) =>
     adminApi.post(`orders/claim_link/${orderId}`, {}) as Promise<{

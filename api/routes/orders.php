@@ -13,9 +13,13 @@ require_once __DIR__ . '/../../includes/push.php';
    against orders.created_at on the server, so a tampered clock changes nothing. */
 const CUSTOMER_CANCEL_SECONDS = 300;
 
-/** Seconds of self-cancel left on an order, 0 once the window or status closes. */
-function cancel_seconds_left(string $status, int $ageSeconds): int
+/** Seconds of self-cancel left, 0 once the window closes, the status moves on,
+    or a request is already in with the kitchen. */
+function cancel_seconds_left(string $status, int $ageSeconds, ?string $requestedAt = null): int
 {
+    if ($requestedAt !== null) {
+        return 0;
+    }
     if (!in_array($status, ['new', 'confirmed'], true)) {
         return 0;
     }
@@ -208,6 +212,8 @@ function route($method, $action, $parts): void
             'SELECT o.id, o.occasion, o.needed_on, o.address_text, o.status,
                     o.total_estimate, o.subtotal, o.cgst, o.sgst, o.gst_rate,
                     o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.cancel_requested_at,
+                    o.cancel_requested_at,
                     o.created_at, b.name AS branch_name,
                     TIMESTAMPDIFF(SECOND, o.created_at, NOW()) AS age_seconds
                FROM orders o
@@ -231,7 +237,7 @@ function route($method, $action, $parts): void
             $o['discount_amount']  = (float)$o['discount_amount'];
             $o['delivery_charge']  = (float)$o['delivery_charge'];
             $o['is_complimentary'] = (bool)$o['is_complimentary'];
-            $o['cancel_seconds_left'] = cancel_seconds_left($o['status'], (int)$o['age_seconds']);
+            $o['cancel_seconds_left'] = cancel_seconds_left($o['status'], (int)$o['age_seconds'], $o['cancel_requested_at']);
             unset($o['age_seconds']);
             foreach ($o['items'] as &$it) {
                 $it['price'] = (float)$it['price'];
@@ -255,7 +261,7 @@ function route($method, $action, $parts): void
         }
         $id = (int)($parts[2] ?? 0);
         $stmt = db()->prepare(
-            'SELECT id, status, created_at,
+            'SELECT id, status, created_at, cancel_requested_at,
                     TIMESTAMPDIFF(SECOND, created_at, NOW()) AS age_seconds
                FROM orders WHERE id = ? AND customer_id = ?'
         );
@@ -267,28 +273,43 @@ function route($method, $action, $parts): void
         if ($order['status'] === 'cancelled') {
             Response::error('This order is already cancelled.');
         }
+        if ($order['cancel_requested_at'] !== null) {
+            Response::error('We have your cancellation request — the kitchen is confirming it.');
+        }
         if (!in_array($order['status'], ['new', 'confirmed'], true)) {
             Response::error('We have already started preparing this order. Please call us and we will help.');
         }
         if ((int)$order['age_seconds'] > CUSTOMER_CANCEL_SECONDS) {
             Response::error('The cancellation window has passed. Please call us and we will help.');
         }
-        db()->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute(['cancelled', $id]);
-        log_order_event($id, 'customer', (int)$customer['id'], $customer['name'], 'cancelled', [
-            'from' => $order['status'], 'within_seconds' => (int)$order['age_seconds'],
+
+        /* Record a REQUEST — deliberately NOT a cancellation. The kitchen may be
+           cooking this right now, so the order keeps its real status until a rep
+           confirms. Marking it cancelled here would tell the customer the food
+           had stopped while it had not, and would leave the staff confirmation
+           with nothing left to decide. */
+        db()->prepare(
+            'UPDATE orders SET cancel_requested_at = NOW(), cancel_requested_by = ?, cancel_requested_label = ?
+              WHERE id = ?'
+        )->execute([(int)$customer['id'], (string)$customer['name'], $id]);
+        log_order_event($id, 'customer', (int)$customer['id'], $customer['name'], 'cancel_requested', [
+            'status' => $order['status'], 'within_seconds' => (int)$order['age_seconds'],
         ]);
 
-        // The kitchen may already be cooking this. Alert every staff device —
-        // no admin performed this, so nobody is excluded. The order stays
-        // flagged on the board until a rep confirms the kitchen was told.
+        // Alert every staff device — no admin did this, so nobody is excluded.
         $cfg = config();
         [$pushSent] = push_send_to_admins(
-            'Order #' . $id . ' cancelled by customer',
-            trim(($customer['name'] ?? 'A customer') . ' cancelled their order. Please tell the kitchen.'),
+            'Cancellation requested — order #' . $id,
+            trim(($customer['name'] ?? 'A customer') . ' wants to cancel. Check with the kitchen and confirm.'),
             $cfg['base_url'] . '/admin/orders'
         );
 
-        Response::json(['ok' => true, 'status' => 'cancelled', 'staff_notified' => (int)$pushSent]);
+        Response::json([
+            'ok' => true,
+            'requested' => true,
+            'status' => $order['status'],
+            'staff_notified' => (int)$pushSent,
+        ]);
     }
 
     // --- show ---
@@ -303,6 +324,8 @@ function route($method, $action, $parts): void
                     o.lat, o.lng, o.notes, o.status, o.total_estimate,
                     o.subtotal, o.cgst, o.sgst, o.gst_rate,
                     o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.cancel_requested_at,
+                    o.cancel_requested_at,
                     o.created_at, b.name AS branch_name,
                     TIMESTAMPDIFF(SECOND, o.created_at, NOW()) AS age_seconds
                FROM orders o
@@ -330,7 +353,7 @@ function route($method, $action, $parts): void
         $order['discount_amount']  = (float)$order['discount_amount'];
         $order['delivery_charge']  = (float)$order['delivery_charge'];
         $order['is_complimentary'] = (bool)$order['is_complimentary'];
-        $order['cancel_seconds_left'] = cancel_seconds_left($order['status'], (int)$order['age_seconds']);
+        $order['cancel_seconds_left'] = cancel_seconds_left($order['status'], (int)$order['age_seconds'], $order['cancel_requested_at']);
         unset($order['age_seconds']);
         $order['items'] = $items;
         Response::json(['order' => $order]);
