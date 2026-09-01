@@ -6,6 +6,7 @@ require_once __DIR__ . '/../../includes/settings.php';
 require_once __DIR__ . '/../../includes/gst.php';
 require_once __DIR__ . '/../../includes/order_lines.php';
 require_once __DIR__ . '/../../includes/order_events.php';
+require_once __DIR__ . '/../../includes/push.php';
 
 /* How long a customer may cancel their own order unaided. The countdown shown
    on the storefront is only UX — this constant is the authority, checked
@@ -276,7 +277,18 @@ function route($method, $action, $parts): void
         log_order_event($id, 'customer', (int)$customer['id'], $customer['name'], 'cancelled', [
             'from' => $order['status'], 'within_seconds' => (int)$order['age_seconds'],
         ]);
-        Response::json(['ok' => true, 'status' => 'cancelled']);
+
+        // The kitchen may already be cooking this. Alert every staff device —
+        // no admin performed this, so nobody is excluded. The order stays
+        // flagged on the board until a rep confirms the kitchen was told.
+        $cfg = config();
+        [$pushSent] = push_send_to_admins(
+            'Order #' . $id . ' cancelled by customer',
+            trim(($customer['name'] ?? 'A customer') . ' cancelled their order. Please tell the kitchen.'),
+            $cfg['base_url'] . '/admin/orders'
+        );
+
+        Response::json(['ok' => true, 'status' => 'cancelled', 'staff_notified' => (int)$pushSent]);
     }
 
     // --- show ---

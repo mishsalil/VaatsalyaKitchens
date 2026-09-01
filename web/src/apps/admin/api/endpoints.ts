@@ -84,6 +84,9 @@ export const adminOrdersApi = {
     adminApi.post(`orders/update/${id}`, data) as Promise<{
       ok: true; order_id: number; total: number; complimentary: boolean;
     }>,
+  /** Confirm a rep has told the kitchen about a cancellation. */
+  ackCancel: (id: number) =>
+    adminApi.post(`orders/ack_cancel/${id}`, {}) as Promise<{ ok: true; acked_by: string }>,
   /** Mint a single-use claim link so a counter customer can sign in on their phone. */
   claimLink: (orderId: number) =>
     adminApi.post(`orders/claim_link/${orderId}`, {}) as Promise<{
@@ -189,6 +192,12 @@ export const adminSettingsApi = {
     return adminApi.post('settings/upload_logo', fd) as Promise<{ ok: true; logo_path: string }>;
   },
   changePassword: (current: string, next: string) => adminApi.post('settings/change_password', { current, new: next }),
+};
+
+/** Staff-device push registration — kitchen alerts, bound to the admin (migration_008). */
+export const adminPushApi = {
+  subscribe: (subscription: unknown) => adminApi.post('push/subscribe', { subscription }),
+  unsubscribe: (endpoint: string) => adminApi.post('push/unsubscribe', { endpoint }),
 };
 
 export const adminBroadcastApi = {

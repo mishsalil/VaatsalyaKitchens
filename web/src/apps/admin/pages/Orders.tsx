@@ -5,6 +5,7 @@ import { Skeleton } from '../../shared/components/Skeleton';
 import { OrdersKanban } from '../components/OrdersKanban';
 import { OrderDrawer } from '../components/OrderDrawer';
 import { ImportExportBar } from '../components/ImportExportBar';
+import { CancelAlerts } from '../components/CancelAlerts';
 
 export function AdminOrders() {
   const { data, loading, error, refetch } = useFetch(() => adminOrdersApi.list(), []);
@@ -45,7 +46,11 @@ export function AdminOrders() {
         ) : error ? (
           <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
         ) : (
-          <OrdersKanban orders={orders} onSelect={setSelectedId} selectedId={selectedId ?? undefined} />
+          <>
+            {/* Cancellations the kitchen may not know about yet — above the board. */}
+            <CancelAlerts orders={orders} onAcked={() => refetch()} />
+            <OrdersKanban orders={orders} onSelect={setSelectedId} selectedId={selectedId ?? undefined} />
+          </>
         )}
       </div>
 

@@ -65,6 +65,9 @@ export interface AdminOrderListItem {
   discount_amount: number;
   delivery_charge: number;
   is_complimentary: boolean;
+  /** Set once a rep confirms the kitchen was told about a cancellation (migration_008). */
+  cancel_acked_at: string | null;
+  cancel_acked_label: string | null;
   created_at: string;
   customer_id: number | null;
   branch_id: number | null;

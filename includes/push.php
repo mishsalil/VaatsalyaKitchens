@@ -18,7 +18,9 @@ function push_configured(): bool
  * Send a notification to a set of push_subscriptions rows.
  * Returns [sent, failed]. Dead subscriptions (endpoint gone) are deleted.
  */
-function push_send(array $subscriptionRows, string $title, string $body, string $url = ''): array
+/** $urgent marks the notification as insistent in sw.js (stays on screen,
+    longer vibration, re-alerts). It cannot override a silenced phone. */
+function push_send(array $subscriptionRows, string $title, string $body, string $url = '', bool $urgent = false): array
 {
     if (!push_configured() || !$subscriptionRows) {
         return [0, 0];
@@ -39,6 +41,7 @@ function push_send(array $subscriptionRows, string $title, string $body, string 
         'body'  => $body,
         'url'   => $url ?: ($cfg['base_url'] . '/account'),
         'icon'  => $cfg['base_url'] . '/assets/icon-192.png',
+        'urgent' => $urgent,
     ], JSON_UNESCAPED_UNICODE);
 
     $sent = 0;
@@ -91,6 +94,29 @@ function push_send_to_customer(int $customerId, string $title, string $body, str
     $stmt = db()->prepare('SELECT * FROM push_subscriptions WHERE customer_id = ?');
     $stmt->execute([$customerId]);
     return push_send($stmt->fetchAll(), $title, $body, $url);
+}
+
+/**
+ * Notify STAFF devices (migration_008) — used when something needs a human at
+ * the kitchen, e.g. a customer cancelling their own order.
+ *
+ * $excludeAdminId skips the person who performed the action: a rep who just
+ * cancelled an order does not need their own phone buzzing about it, and being
+ * pinged for your own actions is how people learn to ignore notifications.
+ */
+function push_send_to_admins(string $title, string $body, string $url = '', ?int $excludeAdminId = null): array
+{
+    $sql = 'SELECT * FROM admin_push_subscriptions';
+    $args = [];
+    if ($excludeAdminId !== null) {
+        $sql .= ' WHERE admin_id <> ?';
+        $args[] = $excludeAdminId;
+    }
+    $stmt = db()->prepare($sql);
+    $stmt->execute($args);
+    // Staff alerts are always urgent — they exist because food is being cooked
+    // for an order that no longer exists.
+    return push_send($stmt->fetchAll(), $title, $body, $url, true);
 }
 
 function push_send_broadcast(string $title, string $body, string $url = ''): array

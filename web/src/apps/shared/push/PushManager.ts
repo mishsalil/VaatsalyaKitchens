@@ -94,24 +94,36 @@ class PushManagerService {
    * Silent best-effort subscription. Only succeeds if permission is already
    * granted. Safe to call repeatedly. Returns true if subscribed afterwards.
    */
-  async ensureSubscribed(): Promise<boolean> {
-    if (!this.supported || !this.vapidKey) return false;
+  /**
+   * The browser-level subscription for this device, creating it if needed, with
+   * NO server registration. The admin area needs the raw subscription so it can
+   * register the device against the signed-in ADMIN instead of the customer —
+   * registering it as a customer first would leave a stray unowned row behind.
+   */
+  async ensureBrowserSubscription(): Promise<PushSubscription | null> {
+    if (!this.supported || !this.vapidKey) return null;
     if (!this.registration) await this.init(this.vapidKey);
-    if (!this.registration) return false;
-    if (this.currentPermission() !== 'granted') return false;
+    if (!this.registration) return null;
+    if (this.currentPermission() !== 'granted') return null;
 
-    let sub = await this.registration.pushManager.getSubscription();
+    const existing = await this.registration.pushManager.getSubscription();
+    if (existing) return existing;
+    try {
+      return await this.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(this.vapidKey) as unknown as BufferSource,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async ensureSubscribed(): Promise<boolean> {
+    const sub = await this.ensureBrowserSubscription();
     if (!sub) {
-      try {
-        sub = await this.registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(this.vapidKey) as unknown as BufferSource,
-        });
-      } catch {
-        this.state = { ...this.state, subscribed: false };
-        this.emit();
-        return false;
-      }
+      this.state = { ...this.state, subscribed: false };
+      this.emit();
+      return false;
     }
     // Keep the server in sync (idempotent upsert by endpoint).
     try {

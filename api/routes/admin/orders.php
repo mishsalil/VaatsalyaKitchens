@@ -100,6 +100,8 @@ function route($method, $action, $parts): void
             'SELECT o.id, o.name, o.phone, o.occasion, o.needed_on, o.address_text,
                     o.status, o.total_estimate, o.subtotal, o.cgst, o.sgst, o.gst_rate,
                     o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.cancel_acked_at, o.cancel_acked_label,
+                    o.cancel_acked_at, o.cancel_acked_label,
                     o.created_at, o.customer_id, o.branch_id,
                     b.name AS branch_name,
                     (SELECT COUNT(*) FROM order_items WHERE order_id = o.id) AS item_count
@@ -181,7 +183,9 @@ function route($method, $action, $parts): void
             'SELECT o.id, o.customer_id, o.name, o.phone, o.occasion, o.needed_on,
                     o.address_text, o.lat, o.lng, o.notes, o.status, o.total_estimate,
                     o.subtotal, o.cgst, o.sgst, o.gst_rate,
+                    o.cancel_acked_at, o.cancel_acked_label,
                     o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.cancel_acked_at, o.cancel_acked_label,
                     o.created_at, o.branch_id, b.name AS branch_name
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id
@@ -499,6 +503,57 @@ function route($method, $action, $parts): void
         ]);
     }
 
+    /* --- confirm the kitchen was told about a cancellation ---
+       A push can be missed or dismissed; the kitchen is actually informed by a
+       person. This records that someone did it, so a cancelled order can stop
+       being flagged on the board. Any signed-in role may confirm — whoever is
+       nearest the kitchen is the right person, not whoever holds a capability.
+
+       This is ALSO where the customer finally hears about it. Cancelling does
+       not notify them (see update_status): telling someone their order is
+       cancelled while the kitchen is still cooking it is worse than telling
+       them a minute later, so the customer's confirmation waits until a human
+       has actually stopped the food. */
+    if ($action === 'ack_cancel' && $method === 'POST') {
+        require_csrf_api($_POST);
+        $id = (int)($parts[3] ?? 0);
+        $stmt = db()->prepare('SELECT id, customer_id, status, cancel_acked_at FROM orders WHERE id = ?');
+        $stmt->execute([$id]);
+        $order = $stmt->fetch();
+        if (!$order) {
+            Response::error('Order not found.', 404);
+        }
+        if ($order['status'] !== 'cancelled') {
+            Response::error('This order is not cancelled.');
+        }
+        if ($order['cancel_acked_at'] !== null) {
+            Response::error('Someone has already confirmed this one.');
+        }
+        db()->prepare(
+            'UPDATE orders SET cancel_acked_at = NOW(), cancel_acked_by = ?, cancel_acked_label = ?
+              WHERE id = ?'
+        )->execute([(int)$admin['id'], (string)$admin['username'], $id]);
+        log_order_event($id, 'admin', (int)$admin['id'], (string)$admin['username'], 'kitchen_informed', []);
+
+        // Now — and only now — tell the customer.
+        $pushSent = 0;
+        if ((int)$order['customer_id'] > 0) {
+            $cfg = config();
+            [$pushSent] = push_send_to_customer(
+                (int)$order['customer_id'],
+                'Order #' . $id . ' cancelled',
+                admin_status_push_body('cancelled'),
+                $cfg['base_url'] . '/account'
+            );
+        }
+
+        Response::json([
+            'ok' => true,
+            'acked_by' => (string)$admin['username'],
+            'customer_notified' => (int)$pushSent,
+        ]);
+    }
+
     // --- update status (with customer push) ---
     if ($action === 'update_status' && $method === 'POST') {
         require_csrf_api($_POST);
@@ -523,9 +578,25 @@ function route($method, $action, $parts): void
             $status === 'cancelled' ? 'cancelled' : 'status',
             ['from' => $order['status'], 'to' => $status]);
 
-        // Notify the customer's devices (no-op if push not configured or no subscriptions).
+        // A cancellation has to reach the kitchen. Alert the other staff
+        // devices — not the rep who just did it, who already knows.
+        $staffNotified = 0;
+        if ($status === 'cancelled' && $order['status'] !== 'cancelled') {
+            $cfg = config();
+            [$staffNotified] = push_send_to_admins(
+                'Order #' . $id . ' cancelled',
+                'Cancelled by ' . $admin['username'] . '. Please make sure the kitchen knows.',
+                $cfg['base_url'] . '/admin/orders',
+                (int)$admin['id']
+            );
+        }
+
+        /* Notify the customer's devices (no-op if push not configured or no
+           subscriptions). Cancellation is the exception: that message is held
+           until a rep confirms the kitchen was told (see ack_cancel), so the
+           customer is never told the food stopped while it is still cooking. */
         $pushSent = 0;
-        if ((int)$order['customer_id'] > 0 && $status !== $order['status']) {
+        if ((int)$order['customer_id'] > 0 && $status !== $order['status'] && $status !== 'cancelled') {
             $cfg = config();
             [$pushSent] = push_send_to_customer(
                 (int)$order['customer_id'],
@@ -534,7 +605,10 @@ function route($method, $action, $parts): void
                 $cfg['base_url'] . '/account'
             );
         }
-        Response::json(['ok' => true, 'status' => $status, 'push_sent' => (int)$pushSent]);
+        Response::json([
+            'ok' => true, 'status' => $status,
+            'push_sent' => (int)$pushSent, 'staff_notified' => (int)$staffNotified,
+        ]);
     }
 
     Response::error('Method not allowed', 405);

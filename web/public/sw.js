@@ -106,25 +106,37 @@ self.addEventListener('push', (event) => {
   let title = 'Vaatsalya Kitchens';
   let body = 'You have an update.';
   let url = '/';
+  let urgent = false;
   try {
     const data = event.data ? event.data.json() : null;
     if (data && typeof data === 'object') {
       if (data.title) title = data.title;
       if (data.body) body = data.body;
       if (data.url) url = data.url;
+      urgent = !!data.urgent;
     } else if (event.data) {
       body = event.data.text();
     }
   } catch {
     if (event.data) body = event.data.text();
   }
+  /* `urgent` (staff cancellation alerts) makes the notification as insistent as
+     the web allows: it stays on screen until dismissed instead of auto-hiding,
+     buzzes longer, and re-alerts if another arrives on the same tag.
+
+     It CANNOT ring through a silenced phone — the notification channel belongs
+     to the browser and no web API can bypass Do Not Disturb. The audible alarm
+     for that lives on the Orders board, which a counter device keeps open. */
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
       data: { url },
       icon: '/favicon.svg',
       badge: '/favicon.svg',
-      vibrate: [80, 40, 80],
+      vibrate: urgent ? [200, 100, 200, 100, 200] : [80, 40, 80],
+      requireInteraction: urgent,
+      tag: urgent ? 'vk-urgent' : undefined,
+      renotify: urgent || undefined,
     })
   );
 });

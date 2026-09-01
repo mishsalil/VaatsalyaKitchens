@@ -7,6 +7,7 @@ import {
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { can, type AdminCap, roleLabel } from '../rbac';
 import { ChangePasswordModal } from '../components/ChangePasswordModal';
+import { StaffAlerts } from '../components/StaffAlerts';
 
 type NavItem = { to: string; label: string; icon: typeof LayoutDashboard; cap: AdminCap };
 
@@ -100,6 +101,7 @@ export function AdminLayout() {
         <Wordmark />
         <div className="flex-1"><NavLinks /></div>
         <div className="flex flex-col gap-1">
+          <StaffAlerts />
           <ChangePwButton onClick={() => setPwOpen(true)} />
           <button
             type="button"
