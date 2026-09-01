@@ -9,6 +9,7 @@ import { computeOrderTotal } from '../../shared/lib/gst';
 import { defaultNeededOnLocal, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
 import { cartKey, type MenuItem } from '../../shared/types';
 import { Button } from '../../shared/components/ui/Button';
+import { CustomerSuggest } from '../components/CustomerSuggest';
 
 /**
  * Counter order entry — the 100-200x/day lane.
@@ -216,6 +217,16 @@ export function AdminNewOrder() {
     };
   }, [phone]);
 
+  /** Fill the whole customer block from one picked suggestion. Address is only
+      taken when the field is still empty, so a rep who already typed a
+      different delivery address for this order does not lose it. */
+  const applyCustomer = (c: { name: string; phone: string; address_text: string | null }) => {
+    setName(c.name);
+    setPhone(c.phone);
+    setKnown(c.name);
+    if (c.address_text) setAddress((prev) => (prev.trim() === '' ? c.address_text ?? '' : prev));
+  };
+
   /** Unit price = base + variant delta + selected add-ons. */
   const entryPrice = (e: CartEntry): number => {
     const item = itemById.get(e.itemId);
@@ -408,25 +419,30 @@ export function AdminNewOrder() {
 
       {/* Customer — one compact block, never a separate step. */}
       <div className="card-soft mt-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <label className="block">
-          <span className="text-xs font-semibold text-brand-600">Mobile *</span>
-          <input
+        <div>
+          <CustomerSuggest
+            label="Mobile *"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={setPhone}
+            onPick={applyCustomer}
+            placeholder="Number or name"
             inputMode="numeric"
-            placeholder="10-digit number"
-            className={`mt-1 ${inputClass}`}
+            className={inputClass}
           />
           {known && (
             <span className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-600">
               <UserCheck className="h-3.5 w-3.5" /> Known: {known}
             </span>
           )}
-        </label>
-        <label className="block">
-          <span className="text-xs font-semibold text-brand-600">Customer name *</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} className={`mt-1 ${inputClass}`} />
-        </label>
+        </div>
+        <CustomerSuggest
+          label="Customer name *"
+          value={name}
+          onChange={setName}
+          onPick={applyCustomer}
+          placeholder="Start typing a name"
+          className={inputClass}
+        />
         <label className="block">
           <span className="text-xs font-semibold text-brand-600">Needed on *</span>
           {editId !== null ? (

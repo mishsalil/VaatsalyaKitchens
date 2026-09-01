@@ -84,6 +84,11 @@ export const adminOrdersApi = {
     adminApi.post(`orders/update/${id}`, data) as Promise<{
       ok: true; order_id: number; total: number; complimentary: boolean;
     }>,
+  /** Type-ahead over past customers (name or partial number) for counter entry. */
+  searchCustomers: (q: string) =>
+    adminApi.get(`orders/search_customers?q=${encodeURIComponent(q)}`) as Promise<{
+      customers: AdminLookupCustomer[];
+    }>,
   /** Confirm with the kitchen — also applies a pending customer request. */
   ackCancel: (id: number) =>
     adminApi.post(`orders/ack_cancel/${id}`, {}) as Promise<{ ok: true; acked_by: string; customer_notified: number }>,

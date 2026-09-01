@@ -269,6 +269,47 @@ function route($method, $action, $parts): void
         ]]);
     }
 
+    /* --- type-ahead customer search for counter entry ---
+       Gated on `new_order`, not `customers`: a rep needs to find a regular
+       while taking their order, but has no business in the customer admin.
+       Matches name OR phone, because at a counter the rep usually knows the
+       person by name and the number is the thing they cannot recall.
+       Most recent orderers first — a busy kitchen's regulars are the answer
+       far more often than an alphabetical match. */
+    if ($action === 'search_customers' && $method === 'GET') {
+        require_admin_cap('new_order');
+        $q = trim((string)($_GET['q'] ?? ''));
+        if (mb_strlen($q) < 2) {
+            Response::json(['customers' => []]);
+        }
+        // Digits typed into the phone box are matched against the stored
+        // 91XXXXXXXXXX form, so "98765" finds +91 98765 43210.
+        $digits = preg_replace('/\D+/', '', $q);
+        $like = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+        $phoneLike = $digits !== '' ? '%' . $digits . '%' : null;
+
+        $sql = 'SELECT c.id, c.name, c.phone,
+                       (SELECT a.address_text FROM addresses a
+                         WHERE a.customer_id = c.id
+                         ORDER BY a.is_default DESC, a.id DESC LIMIT 1) AS address_text
+                  FROM customers c
+                 WHERE c.name LIKE ?';
+        $args = [$like];
+        if ($phoneLike !== null) {
+            $sql .= ' OR c.phone LIKE ?';
+            $args[] = $phoneLike;
+        }
+        $sql .= ' ORDER BY c.last_order_at IS NULL, c.last_order_at DESC, c.id DESC LIMIT 8';
+        $stmt = db()->prepare($sql);
+        $stmt->execute($args);
+        $rows = $stmt->fetchAll();
+        foreach ($rows as &$r) {
+            $r['id'] = (int)$r['id'];
+        }
+        unset($r);
+        Response::json(['customers' => $rows]);
+    }
+
     // --- one-time claim link for a counter customer ---
     // Returns the raw token; the caller builds the URL from its own origin, so
     // the link always points at the app the rep is actually looking at.
