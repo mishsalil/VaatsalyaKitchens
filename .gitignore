@@ -10,3 +10,6 @@ includes/config.php
 # ruflo plugin local state
 .claude/proven-config.json
 .claude/.proven-config-version
+
+# stray files from shell backtick/redirect accidents
+query(SELECT*
