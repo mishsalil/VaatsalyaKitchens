@@ -4,3 +4,6 @@ dist
 .DS_Store
 # vite dependency pre-bundling cache
 .vite
+
+# admin-uploaded branding (logo) — runtime content, per-environment
+public/branding/
