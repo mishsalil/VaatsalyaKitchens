@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, Clock } from 'lucide-react';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { menuApi } from '../../shared/api/endpoints';
@@ -9,6 +9,7 @@ import { MenuItemRow } from '../components/MenuItemRow';
 import { CategoryTabs, CategoryRail } from '../components/CategoryTabs';
 import { CartBar } from '../components/CartBar';
 import { PushNudge } from '../../shared/push/PushNudge';
+import { nextOpenForCategory, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
 
 function ErrorBox({ msg }: { msg: string }) {
   return <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{msg}</p>;
@@ -36,6 +37,25 @@ export function Order() {
   const q = query.trim().toLowerCase();
   const matches = q ? items.filter((it) => it.name.toLowerCase().includes(q)) : [];
 
+  /* Opening hours (migration_010). Sections not being cooked right now are
+     shown but not addable, with the time they return — a customer should learn
+     that Tandoor is an evening service while browsing, not at checkout. */
+  const hours = menu.data?.hours;
+  const now = new Date();
+  const closedCats = new Set(hours?.closed_category_ids ?? []);
+  const backAt = (categoryId: number): string | null => {
+    /* Only mark a SECTION unavailable while the kitchen itself is open —
+       that is the Tandoor case, where the difference is real and specific.
+       When the whole kitchen is shut, every category is technically closed,
+       but the customer is simply ordering for later: the banner above says so
+       once, and greying out all 111 dishes would be noise that stops them
+       building a cart at all. */
+    if (!hours?.open_now) return null;
+    if (!closedCats.has(categoryId)) return null;
+    const next = nextOpenForCategory(hours, categoryId, now);
+    return next ? describeWhen(next, now) : 'later';
+  };
+
   return (
     <div className="container-wide pt-5 pb-32 sm:pb-24">
       {/* Light header */}
@@ -54,6 +74,23 @@ export function Order() {
           </p>
         )}
       </div>
+
+      {/* Kitchen closed — say so once, up front, with the next slot. Ordering is
+          still allowed; what is constrained is when the food can be wanted. */}
+      {hours && !hours.open_now && (
+        <div className="mt-4 flex items-start gap-2 rounded-2xl border border-gold-300 bg-gold-50 p-4 text-gold-900">
+          <Clock className="mt-0.5 h-4 w-4 shrink-0" />
+          <p className="text-sm">
+            <span className="font-bold">The kitchen is closed right now.</span>{' '}
+            {(() => {
+              const next = nextOpenFrom(hours, now);
+              return next
+                ? `You can still order — we will cook it ${describeWhen(next, now)} or any later time you choose.`
+                : 'You can still order for a later time.';
+            })()}
+          </p>
+        </div>
+      )}
 
       {/* Search — the fastest path to a dish when you already know its name. */}
       <div className="mt-4 px-1">
@@ -100,7 +137,7 @@ export function Order() {
           {matches.length > 0 && (
             <div className="divide-y divide-cream-200 overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card">
               {matches.map((it) => (
-                <MenuItemRow key={it.id} item={it} />
+                <MenuItemRow key={it.id} item={it} unavailableUntil={backAt(it.category_id)} />
               ))}
             </div>
           )}
@@ -115,7 +152,7 @@ export function Order() {
               return (
                 <MenuCategory key={cat.id} id={cat.id} name={cat.name}>
                   {catItems.map((it) => (
-                    <MenuItemRow key={it.id} item={it} />
+                    <MenuItemRow key={it.id} item={it} unavailableUntil={backAt(it.category_id)} />
                   ))}
                 </MenuCategory>
               );

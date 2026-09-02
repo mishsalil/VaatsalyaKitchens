@@ -1,7 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { ArrowLeft, Phone } from 'lucide-react';
-import { ordersApi, addressesApi } from '../../shared/api/endpoints';
+import { ordersApi, addressesApi, menuApi } from '../../shared/api/endpoints';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useCart } from '../../shared/context/CartContext';
@@ -13,6 +13,7 @@ import { Button } from '../../shared/components/ui/Button';
 import { FormError } from '../../shared/components/ui/FormError';
 import { OccasionSelect } from '../components/OccasionSelect';
 import { DateTimePicker } from '../components/DateTimePicker';
+import { kitchenOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
 import { AddressPicker, type AddressPayload } from '../components/AddressPicker';
 import { BillDetails, type BillItem } from '../components/BillDetails';
 import { computeGst } from '../../shared/lib/gst';
@@ -30,6 +31,10 @@ export function Checkout() {
   const { lines, total, clear } = useCart();
   const toast = useToast();
   const addresses = useFetch(() => (user ? addressesApi.list() : Promise.resolve({ addresses: [] })), [!!user]);
+  // Opening hours come with the menu; used to correct the chosen time before
+  // submitting rather than bouncing the order back from the server.
+  const menu = useFetch(() => menuApi.get(), []);
+  const hours = menu.data?.hours;
 
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user ? displayPhone(user.phone) : '');
@@ -83,7 +88,19 @@ export function Checkout() {
     let ok = true;
     if (!name.trim()) { setNameErr('Please write your name.'); ok = false; } else setNameErr('');
     if (!phoneDigits) { setPhoneErr('Please write a 10-digit phone number.'); ok = false; } else setPhoneErr('');
-    if (!whenLocal) { setWhenErr('Please tell us when you need the food.'); ok = false; } else setWhenErr('');
+    if (!whenLocal) {
+      setWhenErr('Please tell us when you need the food.'); ok = false;
+    } else if (hours && !kitchenOpenAt(hours, new Date(whenLocal))) {
+      // Caught here so the customer is corrected before submitting; the server
+      // refuses the same thing regardless.
+      const next = nextOpenFrom(hours, new Date(whenLocal));
+      setWhenErr(
+        next
+          ? `We are closed then. The next time we can cook is ${describeWhen(next, new Date())}.`
+          : 'We are closed then. Please pick a time during our opening hours.',
+      );
+      ok = false;
+    } else setWhenErr('');
     if (!ok) return;
     setSubmitting(true);
     try {
@@ -92,6 +109,9 @@ export function Checkout() {
         phone: phoneDigits!,
         occasion,
         needed_on: formatNeededOn(whenLocal),
+        // The raw datetime is what the server validates against opening hours;
+        // needed_on stays free text for the slip and the phone call.
+        needed_at: whenLocal.replace('T', ' ') + ':00',
         notes: notes.trim(),
         items: lines.map((l) => ({
           id: l.id,

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ChevronDown } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ChevronDown, Clock } from 'lucide-react';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { useToast } from '../../shared/context/ToastContext';
 import { Skeleton } from '../../shared/components/Skeleton';
@@ -10,7 +10,8 @@ import { Modal } from '../../shared/components/ui/Modal';
 import { Field } from '../../shared/components/ui/Field';
 import { rupees } from '../../shared/lib/format';
 import { sampleMenuCsv } from '../../shared/lib/sampleCsv';
-import { adminMenuApi, type AdminItemPayload } from '../api/endpoints';
+import { adminMenuApi, adminHoursApi, type AdminItemPayload, type AdminHourWindow } from '../api/endpoints';
+import { HoursEditor } from './HoursEditor';
 import type { AdminMenuCategory, AdminMenuSubcategory, AdminMenuItem } from '../types';
 import { ItemFormModal } from './ItemFormModal';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -65,6 +66,35 @@ export function MenuManager() {
   const [newCat, setNewCat] = useState('');
   const [renameCat, setRenameCat] = useState<AdminMenuCategory | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // Availability windows per category (migration_010). Loaded once; the clock
+  // icon is tinted for any category that has its own hours.
+  const [hoursCat, setHoursCat] = useState<AdminMenuCategory | null>(null);
+  const [categoryHours, setCategoryHours] = useState<Record<string, AdminHourWindow[]>>({});
+  const [draftHours, setDraftHours] = useState<AdminHourWindow[]>([]);
+  const [savingHours, setSavingHours] = useState(false);
+
+  useEffect(() => {
+    adminHoursApi.get().then((h) => setCategoryHours(h.categories)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (hoursCat) setDraftHours(categoryHours[String(hoursCat.id)] ?? []);
+  }, [hoursCat, categoryHours]);
+
+  const saveCategoryHours = async () => {
+    if (!hoursCat) return;
+    setSavingHours(true);
+    try {
+      await adminHoursApi.saveCategory(hoursCat.id, draftHours);
+      setCategoryHours((prev) => ({ ...prev, [String(hoursCat.id)]: draftHours }));
+      toast.success(draftHours.length ? 'Availability hours saved' : 'Now follows the kitchen hours');
+      setHoursCat(null);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSavingHours(false);
+    }
+  };
   const [addSub, setAddSub] = useState<AdminMenuCategory | null>(null);
   const [newSub, setNewSub] = useState('');
   const [renameSub, setRenameSub] = useState<AdminMenuSubcategory | null>(null);
@@ -411,6 +441,18 @@ export function MenuManager() {
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
+                {/* Availability window — the Tandoor case (migration_010). */}
+                <button
+                  type="button"
+                  onClick={() => setHoursCat(cat)}
+                  title="Availability hours"
+                  className={`rounded-lg p-1.5 hover:bg-cream-100 ${
+                    categoryHours[String(cat.id)]?.length ? 'text-gold-600' : 'text-brand-500'
+                  }`}
+                  aria-label={`Availability hours for ${cat.name}`}
+                >
+                  <Clock className="h-4 w-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => setConfirm({ kind: 'category', id: cat.id, name: cat.name })}
@@ -633,6 +675,32 @@ export function MenuManager() {
         onConfirm={runConfirm}
         onClose={() => setConfirm(null)}
       />
+
+      {/* Availability hours for one category (migration_010). */}
+      <Modal open={!!hoursCat} onClose={() => setHoursCat(null)} title={`${hoursCat?.name ?? ''} — availability`}>
+        <p className="text-sm text-brand-600">
+          When this section is cooked. Leave every day empty and it simply follows the kitchen's
+          opening hours. These hours can only narrow the kitchen's — a section is never orderable
+          while the kitchen is closed.
+        </p>
+        <div className="mt-4 max-h-[50vh] overflow-auto pr-1">
+          <HoursEditor
+            value={draftHours}
+            onChange={setDraftHours}
+            emptyLabel="Follows the kitchen's hours."
+          />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <Button onClick={saveCategoryHours} disabled={savingHours}>
+            {savingHours ? 'Saving…' : 'Save availability'}
+          </Button>
+          {draftHours.length > 0 && (
+            <Button variant="outline" onClick={() => setDraftHours([])} disabled={savingHours}>
+              Clear — follow kitchen hours
+            </Button>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

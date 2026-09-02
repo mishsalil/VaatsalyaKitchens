@@ -47,6 +47,28 @@ export interface MenuCategory {
   sort_order: number;
 }
 
+/** One opening window. weekday is 0=Sunday, matching Date.getDay(). */
+export interface HourWindow {
+  weekday: number;
+  opens_at: string;
+  closes_at: string;
+}
+
+/**
+ * Opening hours as the storefront sees them (migration_010). The server
+ * re-checks every rule on order create — this exists so the customer is guided
+ * rather than rejected at the last step.
+ */
+export interface MenuHours {
+  kitchen: HourWindow[];
+  /** Only categories with their OWN windows appear; the rest follow the kitchen. */
+  categories: Record<string, HourWindow[]>;
+  open_now: boolean;
+  closed_category_ids: number[];
+  next_open_at: string | null;
+  server_now: string;
+}
+
 export interface MenuSubcategory {
   id: number;
   category_id: number;

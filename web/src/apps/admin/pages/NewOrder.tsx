@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Search, Minus, X, Check, Printer, UserCheck, Gift, MessageCircle } from 'lucide-react';
+import { Search, Minus, X, Check, Printer, UserCheck, Gift, MessageCircle, Clock } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { adminOrdersApi, type AdminNewOrderLine } from '../api/endpoints';
@@ -8,6 +8,7 @@ import { menuApi } from '../../shared/api/endpoints';
 import { computeOrderTotal } from '../../shared/lib/gst';
 import { defaultNeededOnLocal, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
 import { cartKey, type MenuItem } from '../../shared/types';
+import { kitchenOpenAt, categoryOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
 import { Button } from '../../shared/components/ui/Button';
 import { CustomerSuggest } from '../components/CustomerSuggest';
 
@@ -330,6 +331,33 @@ export function AdminNewOrder() {
 
   const neededOn = editId !== null ? whenText.trim() : formatNeededOn(whenLocal);
 
+  /* Opening hours (migration_010) — a WARNING, never a block. The rep can see
+     the kitchen and can walk over and ask; refusing an order the kitchen has
+     already agreed to would be worse than letting it through. Customers are
+     hard-blocked server-side; staff deliberately are not. */
+  const hoursWarning = (() => {
+    const h = menu.data?.hours;
+    if (!h || editId !== null || !whenLocal) return null;
+    const when = new Date(whenLocal);
+    if (Number.isNaN(when.getTime())) return null;
+    if (!kitchenOpenAt(h, when)) {
+      const next = nextOpenFrom(h, when);
+      return next
+        ? `The kitchen is closed then — it next opens ${describeWhen(next, new Date())}.`
+        : 'The kitchen is closed at that time.';
+    }
+    const shut = lines
+      .map(({ entry }) => itemById.get(entry.itemId))
+      .filter((it): it is MenuItem => !!it)
+      .filter((it) => !categoryOpenAt(h, it.category_id, when));
+    if (shut.length > 0) {
+      const names = [...new Set(shut.map((i) => i.name))];
+      return `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''} ` +
+             `${names.length === 1 ? 'is' : 'are'} not usually cooked at that time.`;
+    }
+    return null;
+  })();
+
   const save = async () => {
     setError(null);
     if (!name.trim()) return setError('Customer name is required.');
@@ -644,6 +672,12 @@ export function AdminNewOrder() {
               </div>
             </dl>
 
+            {hoursWarning && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-xl border border-gold-200 bg-gold-50 px-3 py-2 text-xs text-gold-800">
+                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{hoursWarning} You can still save it.</span>
+              </p>
+            )}
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
             <Button onClick={save} disabled={saving} fullWidth className="mt-4">

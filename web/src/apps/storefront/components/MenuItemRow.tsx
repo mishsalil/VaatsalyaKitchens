@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Clock } from 'lucide-react';
 import type { MenuItem } from '../../shared/types';
 import { useCart } from '../../shared/context/CartContext';
 import { rupees } from '../../shared/lib/format';
@@ -15,7 +16,18 @@ import { ItemPickerModal } from './ItemPickerModal';
  * the stepper +) so each cart line is one explicit configuration. Items with
  * neither add directly, as before.
  */
-export function MenuItemRow({ item }: { item: MenuItem }) {
+export function MenuItemRow({
+  item,
+  unavailableUntil,
+}: {
+  item: MenuItem;
+  /**
+   * Set when this dish's section is not being cooked right now — e.g. Tandoor
+   * before the evening service. Adding is disabled and the row says when it is
+   * back, rather than letting someone build a cart the server will refuse.
+   */
+  unavailableUntil?: string | null;
+}) {
   const { qtyOfItem, add, setQty, lastLineOfItem } = useCart();
   const qty = qtyOfItem(item.id);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -39,7 +51,7 @@ export function MenuItemRow({ item }: { item: MenuItem }) {
 
   return (
     <>
-      <div className="flex gap-3 p-4">
+      <div className={`flex gap-3 p-4 ${unavailableUntil ? 'opacity-60' : ''}`}>
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-brand-900">{item.name}</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-brand-500">
@@ -57,10 +69,19 @@ export function MenuItemRow({ item }: { item: MenuItem }) {
           ) : (
             <p className="mt-1 text-xs text-brand-400">Homestyle · made fresh on order</p>
           )}
+          {unavailableUntil && (
+            <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-xs font-semibold text-gold-800">
+              <Clock className="h-3 w-3" /> Available {unavailableUntil}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 flex-col items-center gap-2">
           <DishImage item={item} className="h-24 w-24" rounded="rounded-2xl" />
-          {qty === 0 ? (
+          {unavailableUntil ? (
+            <span className="inline-flex items-center rounded-full border border-cream-300 bg-cream-100 px-3 py-1 text-xs font-semibold text-brand-400">
+              Not now
+            </span>
+          ) : qty === 0 ? (
             <button
               type="button"
               onClick={onAdd}

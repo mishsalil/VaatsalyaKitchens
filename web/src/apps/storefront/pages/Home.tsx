@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   PartyPopper, Coffee, CookingPot, Home as HomeIcon, ArrowRight, Phone, Mail, Clock, MapPin, ShieldCheck, UtensilsCrossed, ChevronRight,
@@ -10,6 +11,7 @@ import { Button } from '../../shared/components/ui/Button';
 import { DishImage } from '../../shared/components/ui/DishImage';
 import { useCart } from '../../shared/context/CartContext';
 import { PushNudge } from '../../shared/push/PushNudge';
+import { describeWeek } from '../../shared/lib/hours';
 
 const SERVICES = [
   { icon: PartyPopper, title: 'Small Parties', body: 'Birthdays, anniversaries and family functions for 10–50 guests. Curated veg menus, served hot, right on time.' },
@@ -32,6 +34,25 @@ export function Home() {
   const cats = menu.data?.categories ?? [];
   // One-tap Add cards: only items with no variants/add-ons (those need the picker).
   const popular = items.filter((it) => it.variants.length === 0 && it.addons.length === 0).slice(0, 8);
+
+  /* Opening hours for the contact card. Consecutive days with identical hours
+     collapse into one line, so a kitchen open the same time all week reads
+     "Sunday – Saturday · 8:00 AM – 11:59 PM" rather than seven repeated rows. */
+  const groupedHours = useMemo(() => {
+    const week = describeWeek(menu.data?.hours?.kitchen ?? []);
+    if (!menu.data?.hours?.kitchen?.length) return [];
+    const out: { days: string; text: string }[] = [];
+    for (const day of week) {
+      const last = out[out.length - 1];
+      if (last && last.text === day.text) {
+        const [first] = last.days.split(' – ');
+        last.days = `${first} – ${day.day}`;
+      } else {
+        out.push({ days: day.day, text: day.text });
+      }
+    }
+    return out;
+  }, [menu.data]);
 
   return (
     <div>
@@ -181,8 +202,24 @@ export function Home() {
                 <Mail className="h-4 w-4 text-gold-600" />
                 <a href={`mailto:${settings.kitchen_email}`} className="link-quiet">{settings.kitchen_email}</a>
               </li>
-              <li className="flex items-center gap-3">
-                <Clock className="h-4 w-4 text-gold-600" /> 8:00 AM – 12:00 midnight, all days
+              {/* Real schedule, not a hardcoded line (migration_010). Days with
+                  identical hours are grouped so a normal week reads as one row. */}
+              <li className="flex items-start gap-3">
+                <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gold-600" />
+                <span>
+                  {groupedHours.length === 0 ? (
+                    '8:00 AM – 12:00 midnight, all days'
+                  ) : (
+                    <span className="flex flex-col gap-0.5">
+                      {groupedHours.map((g) => (
+                        <span key={g.days}>
+                          <span className="font-medium text-brand-800">{g.days}</span>
+                          {' · '}{g.text}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </span>
               </li>
               <li className="flex items-center gap-3">
                 <MapPin className="h-4 w-4 text-gold-600" /> Cloud kitchen — delivery &amp; pickup available

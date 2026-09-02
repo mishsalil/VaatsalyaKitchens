@@ -1,12 +1,12 @@
 import { api } from './client';
-import type { Address, MeResponse, MenuCategory, MenuItem, Order, OrderListItem } from '../types';
+import type { Address, MeResponse, MenuCategory, MenuHours, MenuItem, Order, OrderListItem } from '../types';
 
 export const meApi = {
   me: () => api.get('me') as Promise<MeResponse>,
 };
 
 export const menuApi = {
-  get: () => api.get('menu') as Promise<{ categories: MenuCategory[]; items: MenuItem[] }>,
+  get: () => api.get('menu') as Promise<{ categories: MenuCategory[]; items: MenuItem[]; hours: MenuHours }>,
 };
 
 export const authApi = {
