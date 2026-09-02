@@ -190,6 +190,25 @@ export const adminAddressesApi = {
   setDefault: (id: number) => adminApi.post(`addresses/set_default/${id}`, {}),
 };
 
+/** Opening hours — the kitchen schedule and per-category windows (migration_010). */
+export interface AdminHourWindow {
+  weekday: number;
+  opens_at: string;
+  closes_at: string;
+}
+
+export const adminHoursApi = {
+  get: () =>
+    adminApi.get('hours') as Promise<{
+      kitchen: AdminHourWindow[];
+      categories: Record<string, AdminHourWindow[]>;
+    }>,
+  saveKitchen: (windows: AdminHourWindow[]) =>
+    adminApi.post('hours/kitchen', { windows }) as Promise<{ ok: true; windows: number }>,
+  saveCategory: (categoryId: number, windows: AdminHourWindow[]) =>
+    adminApi.post(`hours/category/${categoryId}`, { windows }) as Promise<{ ok: true; windows: number }>,
+};
+
 export const adminSettingsApi = {
   get: () => adminApi.get('settings') as Promise<AdminSettingsResponse>,
   update: (data: Omit<AdminSettingsFull, 'logo_path'>) =>

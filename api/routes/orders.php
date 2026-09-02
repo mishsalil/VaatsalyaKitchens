@@ -7,6 +7,7 @@ require_once __DIR__ . '/../../includes/gst.php';
 require_once __DIR__ . '/../../includes/order_lines.php';
 require_once __DIR__ . '/../../includes/order_events.php';
 require_once __DIR__ . '/../../includes/push.php';
+require_once __DIR__ . '/../../includes/hours.php';
 
 /* How long a customer may cancel their own order unaided. The countdown shown
    on the storefront is only UX — this constant is the authority, checked
@@ -54,6 +55,28 @@ function route($method, $action, $parts): void
         if (!is_array($items) || count($items) === 0 || count($items) > 100) {
             Response::error('Please choose at least one dish.');
         }
+
+        /* Opening hours (migration_010). The client sends the raw datetime
+           alongside the free-text needed_on; that raw value is what gets checked
+           and stored. A customer may order at any hour — what is constrained is
+           WHEN the food is wanted, so an off-hours visitor simply picks a slot
+           the kitchen is actually open for. */
+        $neededAtRaw = trim((string)($_POST['needed_at'] ?? ''));
+        $neededAt = null;
+        if ($neededAtRaw !== '') {
+            try { $neededAt = new DateTimeImmutable($neededAtRaw); } catch (Throwable $e) { $neededAt = null; }
+        }
+        if ($neededAt === null) {
+            Response::error('Please tell us when you need the food.');
+        }
+        if (!kitchen_is_open($neededAt)) {
+            $next = kitchen_next_open($neededAt);
+            Response::error(
+                'We are closed at that time. ' .
+                ($next ? 'The next slot we can cook for is ' . $next->format('D j M, g:i A') . '.'
+                       : 'Please pick a time during our opening hours.')
+            );
+        }
         $occasion = mb_substr(trim((string)($_POST['occasion'] ?? '')), 0, 60);
         $notes    = mb_substr(trim((string)($_POST['notes'] ?? '')), 0, 2000);
         $lat = is_numeric($_POST['lat'] ?? null) ? (float)$_POST['lat'] : null;
@@ -65,7 +88,7 @@ function route($method, $action, $parts): void
         $pdo = db();
         $lines = [];
         $total = 0.0;
-        $itemStmt = $pdo->prepare('SELECT name, price, unit FROM menu_items WHERE id = ? AND available = 1');
+        $itemStmt = $pdo->prepare('SELECT name, price, unit, category_id FROM menu_items WHERE id = ? AND available = 1');
         $variantStmt = $pdo->prepare('SELECT id, name, price_delta FROM menu_item_variants WHERE item_id = ? ORDER BY sort_order, id');
         $addonStmt = $pdo->prepare('SELECT id, name, price FROM menu_item_addons WHERE item_id = ? AND available = 1');
         foreach ($items as $it) {
@@ -119,6 +142,15 @@ function route($method, $action, $parts): void
                         $chosenAddonIds[] = $aid;
                     }
                 }
+            }
+
+            // The dish's section must also be cooking at that hour — Tandoor
+            // being an evening service is exactly this check.
+            if (!category_is_open((int)$menuItem['category_id'], $neededAt)) {
+                Response::error(
+                    $menuItem['name'] . ' is not available at that time. ' .
+                    'Please pick another slot or remove it from your order.'
+                );
             }
 
             $lines[] = [
@@ -178,11 +210,12 @@ function route($method, $action, $parts): void
             }
 
             $pdo->prepare(
-                'INSERT INTO orders (customer_id, name, phone, occasion, needed_on,
+                'INSERT INTO orders (customer_id, name, phone, occasion, needed_on, needed_at,
                                      address_text, lat, lng, notes,
                                      total_estimate, subtotal, cgst, sgst, gst_rate, branch_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             )->execute([$customerId, $name, $phone, $occasion ?: null, $neededOn,
+                        $neededAt->format('Y-m-d H:i:s'),
                         $addressText ?: null, $lat, $lng, $notes ?: null,
                         $gst['total'], $gst['subtotal'], $gst['cgst'], $gst['sgst'], $gst['rate'], $branchId]);
             $orderId = (int)$pdo->lastInsertId();

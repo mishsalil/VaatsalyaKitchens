@@ -3,6 +3,8 @@
    (NULL branch_id = shared/default, so admin-created items still show) for the
    current branch. Each item carries its variants (all) and add-ons (available
    only) so the storefront can render a chooser modal. Prices are pre-tax. */
+require_once __DIR__ . '/../../includes/hours.php';
+
 function route($method, $action, $parts): void
 {
     if ($method !== 'GET') {
@@ -75,7 +77,42 @@ function route($method, $action, $parts): void
     }
     unset($it);
 
+    /* Opening hours (migration_010). The storefront uses this to grey out a
+       section that is not being cooked right now and to steer the date picker;
+       the server re-checks all of it on order create regardless. `closed_now`
+       is a convenience — `hours` is the truth, and is what lets the client
+       explain WHEN something comes back. */
+    $now = new DateTimeImmutable();
+    $catHours = [];
+    foreach ($cats as $c) {
+        $w = category_windows((int)$c['id']);
+        $flat = [];
+        foreach ($w as $day => $windows) {
+            foreach ($windows as $win) {
+                $flat[] = ['weekday' => $day, 'opens_at' => $win['opens'], 'closes_at' => $win['closes']];
+            }
+        }
+        if ($flat) {
+            $catHours[(int)$c['id']] = $flat;
+        }
+    }
+    $kitchenFlat = [];
+    foreach (kitchen_windows() as $day => $windows) {
+        foreach ($windows as $win) {
+            $kitchenFlat[] = ['weekday' => $day, 'opens_at' => $win['opens'], 'closes_at' => $win['closes']];
+        }
+    }
+    $nextOpen = kitchen_is_open($now) ? null : kitchen_next_open($now);
+
     Response::json([
+        'hours' => [
+            'kitchen'         => $kitchenFlat,
+            'categories'      => (object)$catHours,
+            'open_now'        => kitchen_is_open($now),
+            'closed_category_ids' => closed_category_ids($now),
+            'next_open_at'    => $nextOpen ? $nextOpen->format('Y-m-d H:i:s') : null,
+            'server_now'      => $now->format('Y-m-d H:i:s'),
+        ],
         'categories' => $cats,
         'subcategories' => $subcats,
         'items' => $items,

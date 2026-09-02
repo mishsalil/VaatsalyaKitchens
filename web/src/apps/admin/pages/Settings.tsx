@@ -7,7 +7,8 @@ import { Skeleton } from '../../shared/components/Skeleton';
 import { Button } from '../../shared/components/ui/Button';
 import { Input, Textarea } from '../../shared/components/ui/Input';
 import { Field } from '../../shared/components/ui/Field';
-import { adminSettingsApi } from '../api/endpoints';
+import { adminSettingsApi, adminHoursApi, type AdminHourWindow } from '../api/endpoints';
+import { HoursEditor } from '../components/HoursEditor';
 import { rupees } from '../../shared/lib/format';
 import { computeGst } from '../../shared/lib/gst';
 import type { AdminSettingsFull } from '../types';
@@ -155,6 +156,9 @@ export function AdminSettings() {
         <PrintPreview s={form} logoPath={logoPath} />
       </section>
 
+      {/* Opening hours — orders can only be wanted during these (migration_010). */}
+      <KitchenHoursSection />
+
       {/* Push status */}
       <section className="card-soft p-5">
         <h2 className="text-base font-bold text-brand-900">Web Push</h2>
@@ -227,5 +231,62 @@ function PrintPreview({ s, logoPath }: { s: AdminSettingsFull; logoPath: string 
       </div>
       {s.print_footer && <p className="mt-3 text-center text-xs text-brand-500">{s.print_footer}</p>}
     </div>
+  );
+}
+/**
+ * The kitchen's weekly schedule. This is the outer limit on every order: a
+ * customer cannot ask for food at a time nothing here covers, and a category
+ * window can only ever narrow these hours, never extend them.
+ */
+function KitchenHoursSection() {
+  const toast = useToast();
+  const hours = useFetch(() => adminHoursApi.get(), []);
+  const [windows, setWindows] = useState<AdminHourWindow[] | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (hours.data) setWindows(hours.data.kitchen);
+  }, [hours.data]);
+
+  const save = async () => {
+    if (!windows) return;
+    setSaving(true);
+    try {
+      await adminHoursApi.saveKitchen(windows);
+      toast.info('Opening hours saved.');
+      hours.refetch();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="card-soft p-5">
+      <h2 className="text-base font-bold text-brand-900">Opening hours</h2>
+      <p className="mt-1 text-sm text-brand-600">
+        When the kitchen takes orders for. A day with no hours is closed, and customers ordering
+        outside these times can only pick a later slot. Add a second window for a split shift.
+      </p>
+      {hours.loading || !windows ? (
+        <p className="mt-3 text-sm text-brand-500">Loading…</p>
+      ) : (
+        <>
+          <div className="mt-4">
+            <HoursEditor
+              value={windows}
+              onChange={setWindows}
+              emptyLabel="Closed all day."
+            />
+          </div>
+          <div className="mt-4">
+            <Button onClick={save} disabled={saving}>
+              {saving ? 'Saving…' : 'Save opening hours'}
+            </Button>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
