@@ -1,5 +1,5 @@
 -- migrate_production.sql
--- EVERY migration (001-010) in one file. SAFE TO RUN MORE THAN ONCE.
+-- EVERY migration (001-011) in one file. SAFE TO RUN MORE THAN ONCE.
 --
 -- ============================================================================
 -- WHAT THIS IS FOR
@@ -353,6 +353,30 @@ SELECT d, '08:00:00', '23:59:59'
 
 
 -- ============================================================================
+-- 011 — bearer tokens for API authentication
+--       Native (Capacitor) serves the SPA from https://localhost, so the
+--       SameSite=Lax session cookie is never sent. A header-borne token works
+--       for web and native alike. Selector/validator, same as customer_tokens.
+--       No FK: subject_type is polymorphic (customer or admin). Verification
+--       resolves the subject on every request and fails closed if it is gone.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  subject_type   ENUM('customer','admin') NOT NULL,
+  subject_id     INT UNSIGNED NOT NULL,
+  selector       CHAR(24) NOT NULL,
+  validator_hash CHAR(64) NOT NULL,
+  device_label   VARCHAR(80) NULL,
+  expires_at     DATETIME NOT NULL,
+  last_used_at   DATETIME NULL,
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_auth_tokens_selector (selector),
+  KEY idx_auth_tokens_subject (subject_type, subject_id),
+  KEY idx_auth_tokens_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ============================================================================
 -- VERIFICATION — every row must read OK.
 -- ============================================================================
 SELECT 'orders.branch_id' AS item, IF(COUNT(*) = 1, 'OK', 'MISSING') AS status FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='branch_id'
@@ -385,4 +409,5 @@ UNION ALL SELECT 'table order_events',              IF(COUNT(*)=1,'OK','MISSING'
 UNION ALL SELECT 'table admin_push_subscriptions',  IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='admin_push_subscriptions'
 UNION ALL SELECT 'table kitchen_hours',             IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='kitchen_hours'
 UNION ALL SELECT 'table category_hours',            IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='category_hours'
+UNION ALL SELECT 'table auth_tokens',               IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='auth_tokens'
 UNION ALL SELECT 'kitchen_hours seeded',            IF(COUNT(*) >= 1,'OK','EMPTY') FROM kitchen_hours;
