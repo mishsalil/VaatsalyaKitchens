@@ -94,6 +94,23 @@ export function Login() {
         <div className="mt-6">
           <PushNudge surface="account" variant="compact" />
         </div>
+
+        {/* The staff way in. On the web this is a convenience — anyone can type
+            /admin — but in the Android app it is the ONLY route: there is no
+            address bar, and nothing else links to the admin area, so without
+            this a shipped app has no way for a rep to sign in at all.
+
+            Deliberately quiet. Customers open this app constantly and will
+            never use this; staff need to find it once and then stay signed in
+            for thirty days. It earns a line of small text, not a tab. */}
+        <div className="mt-10 border-t border-cream-200 pt-4 text-center">
+          <Link
+            to="/admin"
+            className="text-xs font-medium text-brand-400 transition-colors hover:text-brand-700"
+          >
+            Staff sign in
+          </Link>
+        </div>
       </div>
     </div>
   );
