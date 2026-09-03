@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { pushManager, type PushPermission } from './PushManager';
+import { isNativePlatform, registerNativePush, attachNativePushHandlers } from './nativePush';
 import { useAuth } from '../hooks/useAuth';
 
 interface PushContextValue {
@@ -31,7 +32,20 @@ export function PushProvider({ children }: { children: ReactNode }) {
 
   // Initialize the SW + push the moment settings (VAPID key) arrive, then make
   // a silent best-effort subscription attempt on site open.
+  //
+  // The Android shell takes an entirely different route: no service worker and
+  // no VAPID key, because an installed app registers with Google Play services
+  // and receives an FCM token instead. It also does not wait on `settings`,
+  // since none of those values apply to it.
   useEffect(() => {
+    if (isNativePlatform()) {
+      attachNativePushHandlers();
+      // Fire-and-forget: registration memoises itself, so the repeat calls this
+      // effect makes are free. Sending the token to the server is the next step.
+      void registerNativePush();
+      return;
+    }
+
     if (!settings?.vapid_public_key || !settings.push_configured) return;
     pushManager.init(settings.vapid_public_key).then(() => pushManager.ensureSubscribed());
   }, [settings?.vapid_public_key, settings?.push_configured]);

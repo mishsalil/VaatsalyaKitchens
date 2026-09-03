@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "785771923747",
+    "project_id": "vaatsalya-kitchens",
+    "storage_bucket": "vaatsalya-kitchens.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:785771923747:android:0d6131ac2bab766b662496",
+        "android_client_info": {
+          "package_name": "com.vaatsalyakitchens.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjUKYpaTfIoJ_r5FuwJL8yJWeu2qvYrvQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
