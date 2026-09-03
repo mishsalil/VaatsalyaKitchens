@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Vaatsalya Kitchens</string>
+    <string name="title_activity_main">Vaatsalya Kitchens</string>
+    <string name="package_name">com.vaatsalyakitchens.app</string>
+    <string name="custom_url_scheme">com.vaatsalyakitchens.app</string>
+</resources>

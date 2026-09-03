@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The emblem's own disc is this cream (#f7f2e7, the web manifest's
+         background_color), so the adaptive icon's background matches it and the
+         two read as one mark under any launcher mask. White left a visible ring. -->
+    <color name="ic_launcher_background">#F7F2E7</color>
+</resources>

@@ -10,8 +10,8 @@ can order easily.
 - Browse the menu and order with big **+ / −** buttons — no account needed, ever.
 - Every order is **saved in the database** and the customer is
   **auto-registered** from name + phone. The device remembers them
-  (180-day secure cookie): next visit their details are prefilled and their
-  saved addresses appear as one-tap choices.
+  (180-day sign-in token held on the device): next visit their details are
+  prefilled and their saved addresses appear as one-tap choices.
 - Optional **4-digit PIN** lets them sign in from any other device
   (phone number + PIN) to see order history and reorder.
 - **📍 Use my current location** — browser geolocation + OpenStreetMap fills
@@ -90,8 +90,16 @@ php -S localhost:8080
 
 - All database access uses prepared statements; PINs and passwords are hashed
   (`password_hash`); sign-in attempts are rate-limited (5 per 15 min).
-- Remember-me cookies use the selector/validator pattern (only hashes stored).
-- All state-changing requests are CSRF-protected.
+- Sign-in is a bearer token sent in the `Authorization` header, not a cookie —
+  the same credential works in the browser and in the Android app, whose WebView
+  would never send a cookie. Tokens use the selector/validator pattern (only a
+  hash of the validator is stored) and are revoked server-side on sign-out.
+  Customer tokens last 180 days, staff tokens 30.
+- There is no CSRF layer, and none is needed: CSRF defends credentials the
+  browser attaches by itself, and nothing attaches an `Authorization` header.
+  Requests are sent without credentials, so no cookie can ride along.
+- Cross-origin access is a literal allowlist (the Android app's origin plus
+  local dev), never a reflection of whatever `Origin` arrives.
 - `.htaccess` blocks web access to `includes/`, `vendor/`, `scripts/`,
   and `schema.sql`; `config.php` is never in git.
 

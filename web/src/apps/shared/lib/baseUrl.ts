@@ -31,9 +31,22 @@ function join(base: string, ...segments: string[]): string {
   return base.replace(/\/$/, '') + '/' + parts.join('/');
 }
 
-/** apiUrl('me') → /api/me */
+/**
+ * Absolute origin of the API, for builds that are NOT served by the API host.
+ *
+ * The native shell serves this bundle from https://localhost, so a relative
+ * /api/... would resolve to the bundle itself and every call would 404. Native
+ * builds set VITE_API_ORIGIN to the real API host; the web build leaves it
+ * unset and keeps the same-origin relative paths it has always used.
+ *
+ * Whatever host is set here must also appear in the API's CORS allowlist, and
+ * the app's own origin (https://localhost) already does.
+ */
+const API_ORIGIN = (((import.meta as any).env.VITE_API_ORIGIN as string | undefined) ?? '').replace(/\/+$/, '');
+
+/** apiUrl('me') → /api/me  (or https://host/api/me in a native build) */
 export function apiUrl(path: string): string {
-  return join(getBasePath(), 'api', path);
+  return API_ORIGIN + join(getBasePath(), 'api', path);
 }
 
 /** appUrl('login') → /login */
