@@ -18,7 +18,7 @@ import { AdminOrderPrint } from './pages/OrderPrint';
  * The /admin/* subtree. Lazily loaded from App.tsx so the entire admin area
  * (client, auth, layout, pages) lives in its own bundle chunk — the customer
  * storefront never downloads admin code. AdminAuthProvider gives the subtree
- * its own VKADMIN session + CSRF bootstrap, isolated from the customer auth.
+ * its own bearer token in its own storage slot, isolated from the customer auth.
  *
  * Each page under the layout is wrapped in RequireCap (UX mirror of the
  * server-side cap check in /api/admin/*). The print route is full-bleed (no

@@ -35,7 +35,6 @@ function route($method, $action, $parts): void
     if ($method !== 'POST') {
         Response::error('Method not allowed', 405);
     }
-    require_csrf_api($_POST);
 
     if ($action === 'update') {
         $name     = mb_substr(trim((string)($_POST['kitchen_name'] ?? '')), 0, 120) ?: 'Vaatsalya Kitchens';

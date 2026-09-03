@@ -37,7 +37,6 @@ export interface Settings {
 
 export interface MeResponse {
   user: Customer | null;
-  csrf_token: string;
   settings: Settings;
 }
 

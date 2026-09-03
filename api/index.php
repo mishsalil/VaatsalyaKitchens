@@ -1,13 +1,12 @@
 <?php
 /* Customer REST API front controller.
-   Reuses the existing includes/ core (auth, csrf, db, helpers) and dispatches
+   Reuses the existing includes/ core (auth, tokens, db, helpers) and dispatches
    to api/routes/{resource}.php, each defining route($method, $action, $parts).
    Mirrors the edible-oil-ERP api/index.php pattern. */
 
 require __DIR__ . '/../includes/db.php';
 require __DIR__ . '/../includes/helpers.php';
 require __DIR__ . '/../includes/auth.php';
-require __DIR__ . '/../includes/csrf.php';
 require __DIR__ . '/../includes/admin_auth.php';
 require __DIR__ . '/lib/Response.php';
 
@@ -56,7 +55,6 @@ $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 //     Uses the separate VKADMIN session; sub-resource file at routes/admin/{sub}.php,
 //     sub-action in $parts[2], id in $parts[3]. Mirrors the customer dispatch. ---
 if ($resource === 'admin') {
-    admin_session_start();
     require_once __DIR__ . '/../includes/admin_roles.php';
     $sub = $parts[1] ?? '';
     if ($sub === '' || !preg_match('/^[a-z0-9_]+$/', $sub)) {

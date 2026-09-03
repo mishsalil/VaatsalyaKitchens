@@ -36,8 +36,6 @@ function route($method, $action, $parts): void
         if ($method !== 'POST') {
             Response::error('Method not allowed', 405);
         }
-        customer_session_start();
-        require_csrf_api($_POST);
 
         $name = trim((string)($_POST['name'] ?? ''));
         if ($name === '' || mb_strlen($name) > 120) {
@@ -231,7 +229,6 @@ function route($method, $action, $parts): void
             Response::error('Something went wrong saving your order. Please try again or call us.', 500);
         }
 
-        login_customer($customerId);
         Response::json([
             'order_id' => $orderId,
             // Placing an order signs the device in, so hand back a token too —
@@ -292,8 +289,6 @@ function route($method, $action, $parts): void
        CUSTOMER_CANCEL_SECONDS of placing. After that the customer calls — the
        kitchen may already have committed food to the order. */
     if ($action === 'cancel' && $method === 'POST') {
-        customer_session_start();
-        require_csrf_api($_POST);
         $customer = current_customer();
         if (!$customer) {
             Response::error('Please sign in first.', 401);

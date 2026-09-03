@@ -100,7 +100,6 @@ function route($method, $action, $parts): void
     if ($method !== 'POST') {
         Response::error('Method not allowed', 405);
     }
-    require_csrf_api($_POST);
 
     // --- import customers from CSV (columns: name,phone,email) ---
     if ($action === 'import') {

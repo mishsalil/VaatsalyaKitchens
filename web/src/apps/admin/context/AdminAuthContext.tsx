@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { adminMeApi, adminAuthApi } from '../api/endpoints';
-import { setAdminCsrfToken, setAdminAuthToken } from '../api/client';
+import { setAdminAuthToken } from '../api/client';
 import { can as canForRole, type AdminCap } from '../rbac';
 import type { AdminUser, AdminSettings } from '../types';
 
@@ -24,7 +24,6 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   const loadMe = async () => {
     const data = await adminMeApi.me();
-    setAdminCsrfToken(data.csrf_token);
     setAdmin(data.admin);
     setSettings(data.settings);
     return data;
@@ -55,11 +54,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     // this request; clear it only afterwards.
     await adminAuthApi.logout();
     setAdminAuthToken(null);
-    setAdminCsrfToken(null);
     setAdmin(null);
-    // Refresh the (anonymous) CSRF token so a subsequent login can proceed.
-    const data = await adminMeApi.me().catch(() => null);
-    if (data) setAdminCsrfToken(data.csrf_token);
   };
 
   return (

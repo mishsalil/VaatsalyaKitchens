@@ -32,9 +32,8 @@ export function Claim() {
   const redeemed = useRef(false);
 
   useEffect(() => {
-    // Wait for the auth bootstrap: the customer arrives here cold, from a
-    // WhatsApp link, and GET /api/me is what delivers the CSRF token. Posting
-    // before it lands is rejected as "Session expired".
+    // Wait for the auth bootstrap to settle before redeeming, so the sign-in
+    // this produces is not immediately overwritten by the in-flight /api/me.
     if (loading || !token || redeemed.current) return;
     redeemed.current = true;
     authApi

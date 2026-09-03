@@ -9,7 +9,6 @@ function route($method, $action, $parts): void
     if (!$customer) {
         Response::error('Please sign in first.', 401);
     }
-    require_csrf_api($_POST);
 
     $pin = trim((string)($_POST['pin'] ?? ''));
     if (!preg_match('/^\d{4}$/', $pin)) {

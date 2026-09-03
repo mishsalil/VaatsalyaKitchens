@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { meApi, authApi } from '../api/endpoints';
-import { setCsrfToken, setAuthToken } from '../api/client';
+import { setAuthToken } from '../api/client';
 import type { Customer, Settings } from '../types';
 
 interface AuthContextValue {
@@ -21,7 +21,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadMe = async () => {
     const data = await meApi.me();
-    setCsrfToken(data.csrf_token);
     setUser(data.user);
     setSettings(data.settings);
     return data;
@@ -52,14 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // this request; clear it only afterwards.
     await authApi.logout();
     setAuthToken(null);
-    setCsrfToken(null);
     setUser(null);
     // settings stay (branch/contact don't change on logout)
     const data = await meApi.me().catch(() => null);
-    if (data) {
-      setCsrfToken(data.csrf_token);
-      setSettings(data.settings);
-    }
+    if (data) setSettings(data.settings);
   };
 
   return (

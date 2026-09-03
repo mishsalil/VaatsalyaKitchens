@@ -34,7 +34,6 @@ export interface AdminPrintHeader {
 
 export interface AdminMeResponse {
   admin: AdminUser | null;
-  csrf_token: string;
   settings: AdminSettings;
 }
 

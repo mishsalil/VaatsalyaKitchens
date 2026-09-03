@@ -26,7 +26,6 @@ function route($method, $action, $parts): void
             'phone'   => $customer['phone'],
             'has_pin' => !empty($customer['pin_hash']),
         ] : null,
-        'csrf_token' => csrf_token(),
         'settings' => [
             'kitchen_name'          => $s['kitchen_name'],
             'kitchen_address'       => $s['kitchen_address'],

@@ -7,8 +7,6 @@ function route($method, $action, $parts): void
         if ($method !== 'POST') {
             Response::error('Method not allowed', 405);
         }
-        customer_session_start();
-        require_csrf_api($_POST);
 
         $phone = normalize_phone((string)($_POST['phone'] ?? ''));
         $pin   = trim((string)($_POST['pin'] ?? ''));
@@ -26,7 +24,6 @@ function route($method, $action, $parts): void
         $customer = find_customer_by_phone($phone);
         if ($customer && $customer['pin_hash'] && password_verify($pin, $customer['pin_hash'])) {
             clear_attempts('pin:' . $phone);
-            login_customer((int)$customer['id']);
             Response::json([
                 'token' => auth_token_issue('customer', (int)$customer['id'], auth_device_label()),
                 'user'  => [
@@ -52,8 +49,6 @@ function route($method, $action, $parts): void
         if ($method !== 'POST') {
             Response::error('Method not allowed', 405);
         }
-        customer_session_start();
-        require_csrf_api($_POST);
 
         $token = trim((string)($_POST['token'] ?? ''));
         if ($token === '') {
@@ -71,7 +66,6 @@ function route($method, $action, $parts): void
         if (!$customer) {
             Response::error('This link is not valid.', 401);
         }
-        login_customer($customerId);
         Response::json([
             'token' => auth_token_issue('customer', $customerId, auth_device_label()),
             'user'  => [
@@ -87,13 +81,9 @@ function route($method, $action, $parts): void
         if ($method !== 'POST') {
             Response::error('Method not allowed', 405);
         }
-        customer_session_start();
-        require_csrf_api($_POST);
-        // Revoke the presented token as well as the session, so signing out on
-        // the native app actually ends that device's access server-side rather
-        // than merely dropping it from local storage.
+        // Revoke server-side, so signing out actually ends this device's access
+        // rather than merely dropping the token from local storage.
         auth_token_revoke(auth_bearer_token());
-        logout_customer();
         Response::success('Signed out');
     }
 

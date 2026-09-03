@@ -137,7 +137,6 @@ function route($method, $action, $parts): void
     if ($method !== 'POST') {
         Response::error('Method not allowed', 405);
     }
-    require_csrf_api($_POST);
 
     // --- import the menu from CSV (header-mapped; upsert by category + item name) ---
     if ($action === 'import') {

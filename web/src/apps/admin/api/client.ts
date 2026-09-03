@@ -1,31 +1,16 @@
 import { apiUrl } from '../../shared/lib/baseUrl';
 
 /**
- * Admin API client — isolated from the customer client because the admin uses a
- * SEPARATE session (VKADMIN cookie) with its own CSRF token. The customer
- * AuthProvider would overwrite a shared token store, so admin keeps its own.
+ * Admin API client — isolated from the customer client because staff and
+ * customer credentials are independent: a rep can be signed in as both at once,
+ * exactly as the separate VKADMIN and PHPSESSID cookies used to allow. Its token
+ * therefore lives in its own storage slot, which the customer app never touches.
  *
  * Endpoints live under /api/admin/*; this client prefixes `admin/` so callers
  * use the same short names as the customer API (e.g. adminApi.get('orders')).
  *
- * The CSRF token is bootstrapped from GET /api/admin/me by AdminAuthProvider and
- * injected on mutating requests via X-CSRF-Token. On a 403 CSRF error we refresh
- * from /api/admin/me and retry once.
- */
-let adminCsrf: string | null = null;
-
-export function setAdminCsrfToken(token: string | null): void {
-  adminCsrf = token;
-}
-
-export function getAdminCsrfToken(): string | null {
-  return adminCsrf;
-}
-
-/**
- * Admin bearer token (phase 3), in its own localStorage slot for the same
- * reason this whole client is separate: the customer app must not overwrite it.
- * Staff and customer sessions stay independent, as the two cookies always were.
+ * Authentication is a bearer token and nothing else — see the customer client
+ * for why no CSRF token is needed once the credential is not ambient.
  */
 const ADMIN_TOKEN_KEY = 'vk_admin_token';
 
@@ -53,24 +38,9 @@ export function getAdminAuthToken(): string | null {
   return adminToken;
 }
 
-/** Headers every admin request carries, bearer included. */
+/** Headers every admin request carries. */
 function authHeaders(): Record<string, string> {
   return adminToken ? { Authorization: `Bearer ${adminToken}` } : {};
-}
-
-function isMutating(method: string): boolean {
-  return method !== 'GET' && method !== 'HEAD';
-}
-
-async function refreshAdminCsrf(): Promise<string | null> {
-  try {
-    const res = await fetch(apiUrl('admin/me'), { credentials: 'include', headers: authHeaders() });
-    const data = await res.json();
-    adminCsrf = data.csrf_token ?? null;
-    return adminCsrf;
-  } catch {
-    return null;
-  }
 }
 
 function adminUrl(endpoint: string): string {
@@ -79,24 +49,19 @@ function adminUrl(endpoint: string): string {
 
 async function request(method: string, endpoint: string, body?: object | FormData): Promise<any> {
   const url = adminUrl(endpoint);
-  const options: RequestInit = { method, credentials: 'include', headers: {} };
+  const headers: Record<string, string> = { ...authHeaders() };
+  const options: RequestInit = { method, headers };
 
   if (body) {
     if (body instanceof FormData) {
       options.body = body;
     } else {
-      options.headers = { 'Content-Type': 'application/json' };
+      headers['Content-Type'] = 'application/json';
       options.body = JSON.stringify(body);
     }
   }
 
-  Object.assign(options.headers as Record<string, string>, authHeaders());
-
-  if (isMutating(method) && adminCsrf) {
-    (options.headers as Record<string, string>)['X-CSRF-Token'] = adminCsrf;
-  }
-
-  let res = await fetch(url, options);
+  const res = await fetch(url, options);
   const text = await res.text();
   let data: any;
   try {
@@ -105,22 +70,8 @@ async function request(method: string, endpoint: string, body?: object | FormDat
     data = { error: text.trim() || `Request failed: ${res.status} ${res.statusText}` };
   }
 
-  if (res.status === 403 && isMutating(method) && (data?.error || '').toLowerCase().includes('csrf')) {
-    const fresh = await refreshAdminCsrf();
-    if (fresh) {
-      (options.headers as Record<string, string>)['X-CSRF-Token'] = fresh;
-      res = await fetch(url, options);
-      const text2 = await res.text();
-      try {
-        data = JSON.parse(text2);
-      } catch {
-        data = { error: text2.trim() || `Request failed: ${res.status} ${res.statusText}` };
-      }
-    }
-  }
-
-  /* Dead token — drop it, or it would out-rank the VKADMIN cookie forever.
-     See the customer client for the full reasoning. */
+  /* Dead token — drop it so the app lands on the sign-in screen rather than
+     retrying a credential that cannot work. */
   if (res.status === 401 && adminToken) {
     setAdminAuthToken(null);
   }
@@ -139,7 +90,7 @@ export const adminApi = {
   delete: (endpoint: string) => request('DELETE', endpoint),
   /** GET a binary/CSV response as a Blob (bypasses JSON parsing). Used by CSV export. */
   csvGet: async (endpoint: string): Promise<Blob> => {
-    const res = await fetch(adminUrl(endpoint), { credentials: 'include', headers: authHeaders() });
+    const res = await fetch(adminUrl(endpoint), { headers: authHeaders() });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       let msg = text.trim() || `Request failed: ${res.status} ${res.statusText}`;

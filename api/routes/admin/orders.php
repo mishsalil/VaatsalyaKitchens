@@ -315,7 +315,6 @@ function route($method, $action, $parts): void
     // the link always points at the app the rep is actually looking at.
     if ($action === 'claim_link' && $method === 'POST') {
         require_admin_cap('new_order');
-        require_csrf_api($_POST);
         $id = (int)($parts[3] ?? 0);
         $stmt = db()->prepare('SELECT customer_id, name, phone FROM orders WHERE id = ?');
         $stmt->execute([$id]);
@@ -346,7 +345,6 @@ function route($method, $action, $parts): void
     // nothing left to confirm by phone.
     if ($action === 'create' && $method === 'POST') {
         require_admin_cap('new_order');
-        require_csrf_api($_POST);
 
         $name = trim((string)($_POST['name'] ?? ''));
         if ($name === '' || mb_strlen($name) > 120) {
@@ -448,7 +446,6 @@ function route($method, $action, $parts): void
        mistake, and neither is what "edit the order" means at a counter. */
     if ($action === 'update' && $method === 'POST') {
         require_admin_cap('new_order');
-        require_csrf_api($_POST);
         $id = (int)($parts[3] ?? 0);
 
         $pdo = db();
@@ -554,7 +551,6 @@ function route($method, $action, $parts): void
        them a minute later, so the customer's confirmation waits until a human
        has actually stopped the food. */
     if ($action === 'ack_cancel' && $method === 'POST') {
-        require_csrf_api($_POST);
         $id = (int)($parts[3] ?? 0);
         $stmt = db()->prepare(
             'SELECT id, customer_id, status, cancel_acked_at, cancel_requested_at FROM orders WHERE id = ?'
@@ -611,7 +607,6 @@ function route($method, $action, $parts): void
        one possible outcome, which makes it a delay rather than a request, and a
        rep who cannot say no simply never clicks — leaving it pending forever. */
     if ($action === 'reject_cancel' && $method === 'POST') {
-        require_csrf_api($_POST);
         $id = (int)($parts[3] ?? 0);
         $reason = mb_substr(trim((string)($_POST['reason'] ?? '')), 0, 200);
         $stmt = db()->prepare('SELECT id, customer_id, status, cancel_requested_at FROM orders WHERE id = ?');
@@ -648,7 +643,6 @@ function route($method, $action, $parts): void
 
     // --- update status (with customer push) ---
     if ($action === 'update_status' && $method === 'POST') {
-        require_csrf_api($_POST);
         $id = (int)($parts[3] ?? 0);
         $status = (string)($_POST['status'] ?? '');
         $valid = ['new', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'cancelled'];

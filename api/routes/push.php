@@ -6,8 +6,6 @@ function route($method, $action, $parts): void
     if ($method !== 'POST') {
         Response::error('Method not allowed', 405);
     }
-    customer_session_start();
-    require_csrf_api($_POST);
 
     if ($action === 'subscribe') {
         $sub = $_POST['subscription'] ?? [];

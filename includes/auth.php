@@ -1,40 +1,14 @@
 <?php
-/* Customer authentication: PHP session + long-lived remember-me cookie
-   (selector:validator pattern — only a hash of the validator is stored). */
+/* Customer authentication: bearer tokens only (see includes/tokens.php).
+   The PHP session and the remember-me cookie it used to carry are gone —
+   a native WebView serves the app from https://localhost and never sends
+   either, so one credential now works everywhere instead of two that worked
+   in one place each. customer_tokens survives for single-use claim links. */
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/tokens.php';
 
-const REMEMBER_COOKIE = 'vk_remember';
-const REMEMBER_DAYS   = 180;
-
-function customer_session_start(): void
-{
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        return;
-    }
-    session_set_cookie_params([
-        'lifetime' => 0,
-        'path'     => '/',
-        'secure'   => !empty($_SERVER['HTTPS']),
-        'httponly' => true,
-        'samesite' => 'Lax',
-    ]);
-    session_start();
-}
-
-/** Returns the logged-in customer row or null.
- *
- *  Three credentials, tried in order:
- *    1. Authorization: Bearer — the native app, and the web app from phase 3.
- *    2. The session cookie.
- *    3. The remember-me cookie, which also revives the session.
- *
- *  A PRESENT BEARER TOKEN IS AUTHORITATIVE. If it is invalid, expired, or names
- *  someone who no longer exists, this returns null rather than falling back to
- *  a cookie. Falling back would hide expiry from the native app, which has no
- *  cookie to fall back to and needs the 401 in order to re-authenticate; on the
- *  web it could quietly serve a different customer than the token named. */
+/** Returns the signed-in customer row, or null. */
 function current_customer(): ?array
 {
     static $cached = false;
@@ -44,42 +18,13 @@ function current_customer(): ?array
     }
     $cached = true;
 
-    $bearer = auth_bearer_token();
-    if ($bearer !== null) {
-        $claim = auth_token_resolve($bearer);
-        // find_customer() fails closed: a token outliving its customer authenticates nobody.
-        $customer = ($claim && $claim['subject_type'] === 'customer')
-            ? find_customer($claim['subject_id'])
-            : null;
-        return $customer;
-    }
+    $claim = auth_token_resolve(auth_bearer_token());
+    // find_customer() fails closed: a token outliving its customer authenticates nobody.
+    $customer = ($claim && $claim['subject_type'] === 'customer')
+        ? find_customer($claim['subject_id'])
+        : null;
 
-    customer_session_start();
-
-    if (!empty($_SESSION['customer_id'])) {
-        $customer = find_customer((int)$_SESSION['customer_id']);
-        return $customer;
-    }
-
-    // Try the remember cookie
-    $cookie = $_COOKIE[REMEMBER_COOKIE] ?? '';
-    if ($cookie && str_contains($cookie, ':')) {
-        [$selector, $validator] = explode(':', $cookie, 2);
-        $stmt = db()->prepare(
-            'SELECT * FROM customer_tokens WHERE selector = ? AND expires_at > NOW()'
-        );
-        $stmt->execute([$selector]);
-        $token = $stmt->fetch();
-        if ($token && hash_equals($token['validator_hash'], hash('sha256', $validator))) {
-            $_SESSION['customer_id'] = (int)$token['customer_id'];
-            $customer = find_customer((int)$token['customer_id']);
-            return $customer;
-        }
-        // Stale or tampered cookie — clear it
-        setcookie(REMEMBER_COOKIE, '', ['expires' => time() - 3600, 'path' => '/']);
-    }
-
-    return null;
+    return $customer;
 }
 
 function find_customer(int $id): ?array
@@ -94,44 +39,6 @@ function find_customer_by_phone(string $phone): ?array
     $stmt = db()->prepare('SELECT * FROM customers WHERE phone = ?');
     $stmt->execute([$phone]);
     return $stmt->fetch() ?: null;
-}
-
-/** Log the customer into the session and (re)issue a remember cookie for this device. */
-function login_customer(int $customerId): void
-{
-    customer_session_start();
-    session_regenerate_id(true);
-    $_SESSION['customer_id'] = $customerId;
-    issue_remember_token($customerId);
-}
-
-function issue_remember_token(int $customerId): void
-{
-    $selector  = bin2hex(random_bytes(12));      // 24 chars
-    $validator = bin2hex(random_bytes(32));
-    $expires   = (new DateTime('+' . REMEMBER_DAYS . ' days'))->format('Y-m-d H:i:s');
-
-    $stmt = db()->prepare(
-        'INSERT INTO customer_tokens (customer_id, selector, validator_hash, expires_at)
-         VALUES (?, ?, ?, ?)'
-    );
-    $stmt->execute([$customerId, $selector, hash('sha256', $validator), $expires]);
-
-    setcookie(REMEMBER_COOKIE, $selector . ':' . $validator, [
-        'expires'  => time() + REMEMBER_DAYS * 86400,
-        'path'     => '/',
-        'secure'   => !empty($_SERVER['HTTPS']),
-        'httponly' => true,
-        'samesite' => 'Lax',
-    ]);
-
-    // Keep at most 10 devices per customer
-    db()->prepare(
-        'DELETE FROM customer_tokens WHERE customer_id = ? AND id NOT IN (
-            SELECT id FROM (SELECT id FROM customer_tokens WHERE customer_id = ?
-                            ORDER BY id DESC LIMIT 10) keep
-         )'
-    )->execute([$customerId, $customerId]);
 }
 
 /* --- One-time claim links (counter orders) ---------------------------------
@@ -178,21 +85,6 @@ function consume_claim_token(string $token): ?int
     // Single use: burn it before granting the session.
     db()->prepare('DELETE FROM customer_tokens WHERE id = ?')->execute([(int)$row['id']]);
     return (int)$row['customer_id'];
-}
-
-function logout_customer(): void
-{
-    customer_session_start();
-
-    $cookie = $_COOKIE[REMEMBER_COOKIE] ?? '';
-    if ($cookie && str_contains($cookie, ':')) {
-        [$selector] = explode(':', $cookie, 2);
-        db()->prepare('DELETE FROM customer_tokens WHERE selector = ?')->execute([$selector]);
-    }
-    setcookie(REMEMBER_COOKIE, '', ['expires' => time() - 3600, 'path' => '/']);
-
-    $_SESSION = [];
-    session_destroy();
 }
 
 /**

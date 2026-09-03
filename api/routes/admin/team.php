@@ -34,7 +34,6 @@ function route($method, $action, $parts): void
     if ($method !== 'POST') {
         Response::error('Method not allowed', 405);
     }
-    require_csrf_api($_POST);
 
     if ($action === 'add') {
         $username = mb_substr(trim((string)($_POST['username'] ?? '')), 0, 60);

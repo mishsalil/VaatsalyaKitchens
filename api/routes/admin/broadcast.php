@@ -18,7 +18,6 @@ function route($method, $action, $parts): void
     }
 
     if ($action === 'send' && $method === 'POST') {
-        require_csrf_api($_POST);
         if (!push_configured()) {
             Response::error('Web Push is not configured. Add VAPID keys to includes/config.php first.', 400);
         }

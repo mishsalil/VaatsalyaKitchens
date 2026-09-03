@@ -1,7 +1,6 @@
 <?php
-/* GET /api/admin/me — current admin (or null) + CSRF token + public settings.
-   The admin SPA bootstraps from this (token + whether already signed in).
-   No CSRF required here, mirroring the customer /api/me. */
+/* GET /api/admin/me — current admin (or null) + public settings.
+   The admin SPA bootstraps from this to learn whether it is already signed in. */
 require_once __DIR__ . '/../../../includes/settings.php';
 
 function route($method, $action, $parts): void
@@ -17,7 +16,6 @@ function route($method, $action, $parts): void
             'username' => $admin['username'],
             'role'     => (string)($admin['role'] ?? 'staff'),
         ] : null,
-        'csrf_token' => csrf_token(),
         'settings' => [
             'kitchen_whatsapp'      => $cfg['kitchen_whatsapp'],
             'kitchen_phone_display' => $cfg['kitchen_phone_display'],

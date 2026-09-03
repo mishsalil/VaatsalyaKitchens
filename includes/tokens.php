@@ -13,7 +13,14 @@
 
 require_once __DIR__ . '/db.php';
 
-const AUTH_TOKEN_DAYS = 30;
+/* Lifetimes differ by subject, to preserve what each already had.
+   A customer's token replaces the 180-day remember-me cookie; shortening that
+   to 30 days would sign out a customer who orders monthly, every single time.
+   Staff get 30 days: today an admin session dies with the browser, so 30 days
+   is already more generous, and a counter phone is the device most likely to
+   be lost. auth_token_revoke_all() is how a lost one is cut off. */
+const AUTH_TOKEN_DAYS          = 30;    // admin
+const AUTH_TOKEN_DAYS_CUSTOMER = 180;   // matches the cookie it replaces
 
 /** Read the bearer token from the request, or null.
  *
@@ -69,7 +76,8 @@ function auth_token_issue(string $subjectType, int $subjectId, ?string $deviceLa
         $selector,
         hash('sha256', $validator),
         $deviceLabel !== null ? mb_substr($deviceLabel, 0, 80) : null,
-        (new DateTime('+' . AUTH_TOKEN_DAYS . ' days'))->format('Y-m-d H:i:s'),
+        (new DateTime('+' . ($subjectType === 'customer' ? AUTH_TOKEN_DAYS_CUSTOMER : AUTH_TOKEN_DAYS) . ' days'))
+            ->format('Y-m-d H:i:s'),
     ]);
 
     return $selector . '.' . $validator;
