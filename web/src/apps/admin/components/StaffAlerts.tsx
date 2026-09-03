@@ -3,6 +3,7 @@ import { BellRing, BellOff } from 'lucide-react';
 import { usePush } from '../../shared/push/usePush';
 import { pushManager } from '../../shared/push/PushManager';
 import { isNativePlatform, registerNativePush } from '../../shared/push/nativePush';
+import { hasDndAccess, openDndSettings } from '../../shared/push/dndAccess';
 import { adminPushApi } from '../api/endpoints';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { useToast } from '../../shared/context/ToastContext';
@@ -29,6 +30,35 @@ export function StaffAlerts({ variant = 'sidebar' }: { variant?: 'sidebar' | 'ba
   const [busy, setBusy] = useState(false);
   const [registered, setRegistered] = useState(false);
   const attempted = useRef<string | null>(null);
+  // Starts true so the prompt cannot flash before the real state is known.
+  const [dndGranted, setDndGranted] = useState(true);
+
+  /* Do Not Disturb access, re-checked whenever the app comes back to the
+     foreground. openSettings() resolves as soon as the settings screen opens,
+     not when anything is granted — the grant happens in another app entirely,
+     and returning here is the only signal that it might have changed. */
+  useEffect(() => {
+    if (!isNativePlatform() || !admin) return;
+
+    const refresh = () => {
+      hasDndAccess().then(setDndGranted).catch(() => setDndGranted(true));
+    };
+    refresh();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [admin?.id]);
+
+  const grantDnd = async () => {
+    try {
+      await openDndSettings();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  };
 
   /* The Android app registers its FCM token instead of a browser subscription:
      it has no service worker, and `supported`/`permission` describe Web Push,
@@ -80,6 +110,45 @@ export function StaffAlerts({ variant = 'sidebar' }: { variant?: 'sidebar' | 'ba
      state the FCM effect actually established, and never offers the browser
      permission flow, which cannot help it. */
   if (isNativePlatform()) {
+    /* The one thing still worth asking for on a counter phone. Alerts are
+       already loud without it — the urgent channel plays at alarm volume — so
+       this is framed as the remaining gap rather than as a broken setup, and
+       it never blocks anything. */
+    if (registered && !dndGranted) {
+      if (variant === 'sidebar') {
+        return (
+          <button
+            type="button"
+            onClick={grantDnd}
+            className="flex w-full items-center gap-1.5 px-3 text-left text-[11px] font-medium text-gold-700 hover:text-gold-900"
+          >
+            <BellOff className="h-3.5 w-3.5 shrink-0" />
+            <span>Alerts on — allow through Do Not Disturb</span>
+          </button>
+        );
+      }
+      return (
+        <div className="mb-5 flex items-start gap-2 rounded-2xl border border-gold-300 bg-gold-50 p-4 text-gold-900">
+          <BellOff className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="text-sm">
+            <p>
+              <span className="font-bold">Alerts are on, but Do Not Disturb can still silence them.</span>{' '}
+              For a counter phone, allow this app through Do Not Disturb — a one-time setting on this
+              device. Android opens a list of apps; find{' '}
+              <span className="font-semibold">Vaatsalya Kitchens</span> and turn it on.
+            </p>
+            <button
+              type="button"
+              onClick={grantDnd}
+              className="mt-2 rounded-full border border-gold-400 px-3 py-1 text-xs font-semibold hover:bg-gold-100"
+            >
+              Open the setting
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (!registered || variant !== 'sidebar') return null;
     return (
       <p className="flex items-center gap-1.5 px-3 text-[11px] font-medium text-emerald-600">

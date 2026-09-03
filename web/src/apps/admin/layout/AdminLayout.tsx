@@ -139,6 +139,11 @@ export function AdminLayout() {
             </div>
             <div className="flex-1"><NavLinks onNavigate={() => setOpen(false)} /></div>
             <div className="flex flex-col gap-1">
+              {/* Also here, not only in the desktop sidebar: that sidebar is
+                  hidden below sm, so on a phone — the counter device this whole
+                  alerting feature exists for — the state and the Do Not Disturb
+                  prompt were invisible. */}
+              <StaffAlerts />
               <ChangePwButton onClick={() => { setOpen(false); setPwOpen(true); }} />
               <button type="button" onClick={() => { setOpen(false); signOut(); }} className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-brand-600 hover:bg-cream-100">
                 <LogOut className="h-4 w-4" /> Sign out

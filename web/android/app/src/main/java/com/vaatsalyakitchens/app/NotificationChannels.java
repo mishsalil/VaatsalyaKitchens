@@ -88,12 +88,36 @@ public final class NotificationChannels {
         manager.createNotificationChannel(normal);
     }
 
-    /** True once the user has granted Do Not Disturb access. */
+    /** Whether the app holds notification-policy access.
+     *
+     *  NOT a reliable signal on its own: an emulator image was observed
+     *  returning true from this while the system listed no package as having
+     *  the access and the channel could not in fact bypass anything. Kept for
+     *  diagnosis; urgentChannelBypassesDnd() is what the UI should trust. */
     public static boolean hasDndAccess(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return true;
         }
         NotificationManager manager = context.getSystemService(NotificationManager.class);
         return manager != null && manager.isNotificationPolicyAccessGranted();
+    }
+
+    /** Whether the urgent channel can ACTUALLY bypass Do Not Disturb.
+     *
+     *  This is the ground truth, and the only thing that decides whether a
+     *  cancellation is heard on a silenced phone. Android settles a channel's
+     *  bypass flag when the channel is created and honours setBypassDnd(true)
+     *  only if the access was already held, so the answer here can differ from
+     *  hasDndAccess() in both directions. */
+    public static boolean urgentChannelBypassesDnd(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return true;   // no channels, and no per-channel DND override to win
+        }
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        if (manager == null) {
+            return false;
+        }
+        NotificationChannel channel = manager.getNotificationChannel(URGENT);
+        return channel != null && channel.canBypassDnd();
     }
 }
