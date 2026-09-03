@@ -17,7 +17,7 @@ export const authApi = {
 };
 
 export const ordersApi = {
-  create: (body: object) => api.post('orders/create', body) as Promise<{ order_id: number }>,
+  create: (body: object) => api.post('orders/create', body) as Promise<{ order_id: number; token?: string }>,
   list: () => api.get('orders') as Promise<{ orders: OrderListItem[] }>,
   show: (id: number) => api.get(`orders/show/${id}`) as Promise<{ order: Order }>,
   /** Self-cancel, allowed only inside the server's window. */

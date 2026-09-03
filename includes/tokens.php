@@ -40,6 +40,14 @@ function auth_bearer_token(): ?string
     return $m[1];
 }
 
+/** A human-readable label for the device signing in, for the revoke list.
+ *  The raw User-Agent: ugly, but honest, and never rendered as HTML. */
+function auth_device_label(): ?string
+{
+    $ua = trim((string)($_SERVER['HTTP_USER_AGENT'] ?? ''));
+    return $ua === '' ? null : mb_substr($ua, 0, 80);
+}
+
 /** Issue a token for a subject. Returns "selector.validator" — the only moment
  *  the validator exists in plaintext, so the caller must return it to the client
  *  and never log it. */

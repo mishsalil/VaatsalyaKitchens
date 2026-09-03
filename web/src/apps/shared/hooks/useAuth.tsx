@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { meApi, authApi } from '../api/endpoints';
-import { setCsrfToken } from '../api/client';
+import { setCsrfToken, setAuthToken } from '../api/client';
 import type { Customer, Settings } from '../types';
 
 interface AuthContextValue {
@@ -41,12 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (phone: string, pin: string) => {
-    await authApi.login(phone, pin);
+    const data = await authApi.login(phone, pin);
+    // Store before loadMe(), so the very next request already carries it.
+    setAuthToken(data?.token ?? null);
     await loadMe();
   };
 
   const logout = async () => {
+    // Logout revokes the token server-side, so it must still be attached to
+    // this request; clear it only afterwards.
     await authApi.logout();
+    setAuthToken(null);
     setCsrfToken(null);
     setUser(null);
     // settings stay (branch/contact don't change on logout)

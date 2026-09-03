@@ -12,13 +12,55 @@ export function setCsrfToken(token: string | null): void {
   csrfToken = token;
 }
 
+/**
+ * Bearer token (phase 3). Persisted in localStorage so a reload stays signed in
+ * without relying on a cookie — which is the whole point: the native WebView
+ * serves the app from https://localhost, making the session cookie cross-site
+ * and therefore never sent.
+ *
+ * Every access is wrapped: localStorage throws outright in some privacy modes,
+ * and a storage failure must degrade to "signed out", never to a crash.
+ *
+ * The admin app keeps its own separate slot, mirroring the independent VKADMIN
+ * and PHPSESSID cookies, so a rep can be signed in as staff and as a customer
+ * at the same time.
+ */
+const TOKEN_KEY = 'vk_token';
+
+function readStoredToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let authToken: string | null = readStoredToken();
+
+export function setAuthToken(token: string | null): void {
+  authToken = token;
+  try {
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    else localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* in-memory token still works for this session */
+  }
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
 function isMutating(method: string): boolean {
   return method !== 'GET' && method !== 'HEAD';
 }
 
 async function refreshCsrfToken(): Promise<string | null> {
   try {
-    const res = await fetch(apiUrl('me'), { credentials: 'include' });
+    const res = await fetch(apiUrl('me'), {
+      credentials: 'include',
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    });
     const data = await res.json();
     csrfToken = data.csrf_token ?? null;
     return csrfToken;
@@ -42,6 +84,10 @@ async function request(method: string, endpoint: string, body?: object | FormDat
       options.headers = { 'Content-Type': 'application/json' };
       options.body = JSON.stringify(body);
     }
+  }
+
+  if (authToken) {
+    (options.headers as Record<string, string>)['Authorization'] = `Bearer ${authToken}`;
   }
 
   if (isMutating(method)) {
@@ -70,6 +116,15 @@ async function request(method: string, endpoint: string, body?: object | FormDat
         data = { error: text2.trim() || `Request failed: ${res.status} ${res.statusText}` };
       }
     }
+  }
+
+  /* A 401 while holding a token means the token is dead — expired, revoked, or
+     issued to a customer who no longer exists. Drop it. The server treats a
+     present token as authoritative, so keeping a dead one would out-rank the
+     session cookie and lock the app out permanently instead of just signing
+     the user out once. */
+  if (res.status === 401 && authToken) {
+    setAuthToken(null);
   }
 
   if (!res.ok) {

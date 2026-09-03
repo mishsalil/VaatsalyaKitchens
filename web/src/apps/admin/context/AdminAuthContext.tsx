@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { adminMeApi, adminAuthApi } from '../api/endpoints';
-import { setAdminCsrfToken } from '../api/client';
+import { setAdminCsrfToken, setAdminAuthToken } from '../api/client';
 import { can as canForRole, type AdminCap } from '../rbac';
 import type { AdminUser, AdminSettings } from '../types';
 
@@ -44,12 +44,17 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (username: string, password: string) => {
-    await adminAuthApi.login(username, password);
+    const data = await adminAuthApi.login(username, password);
+    // Store before loadMe(), so the very next request already carries it.
+    setAdminAuthToken(data?.token ?? null);
     await loadMe();
   };
 
   const logout = async () => {
+    // Logout revokes the token server-side, so it must still be attached to
+    // this request; clear it only afterwards.
     await adminAuthApi.logout();
+    setAdminAuthToken(null);
     setAdminCsrfToken(null);
     setAdmin(null);
     // Refresh the (anonymous) CSRF token so a subsequent login can proceed.

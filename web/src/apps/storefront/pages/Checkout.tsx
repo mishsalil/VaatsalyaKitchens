@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 import { ArrowLeft, Phone } from 'lucide-react';
 import { ordersApi, addressesApi, menuApi } from '../../shared/api/endpoints';
+import { setAuthToken } from '../../shared/api/client';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useCart } from '../../shared/context/CartContext';
@@ -126,7 +127,10 @@ export function Checkout() {
         body.lat = address.lat;
         body.lng = address.lng;
       }
-      const { order_id } = await ordersApi.create(body);
+      const { order_id, token } = await ordersApi.create(body);
+      // Placing the order signs a guest in. Keep the token, or the native app
+      // would be "signed in" only by a cookie its WebView never sends.
+      setAuthToken(token ?? null);
       clear();
       await refresh(); // guest → logged in
       navigate(`/order-success/${order_id}`);

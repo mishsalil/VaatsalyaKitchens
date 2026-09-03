@@ -36,7 +36,7 @@ export const adminDashboardApi = {
 
 export const adminAuthApi = {
   login: (username: string, password: string) =>
-    adminApi.post('auth/login', { username, password }) as Promise<{ admin: { id: number; username: string; role: string }; csrf_token: string }>,
+    adminApi.post('auth/login', { username, password }) as Promise<{ admin: { id: number; username: string; role: string }; csrf_token: string; token?: string }>,
   logout: () => adminApi.post('auth/logout', {}),
 };
 

@@ -22,13 +22,49 @@ export function getAdminCsrfToken(): string | null {
   return adminCsrf;
 }
 
+/**
+ * Admin bearer token (phase 3), in its own localStorage slot for the same
+ * reason this whole client is separate: the customer app must not overwrite it.
+ * Staff and customer sessions stay independent, as the two cookies always were.
+ */
+const ADMIN_TOKEN_KEY = 'vk_admin_token';
+
+function readStoredAdminToken(): string | null {
+  try {
+    return localStorage.getItem(ADMIN_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let adminToken: string | null = readStoredAdminToken();
+
+export function setAdminAuthToken(token: string | null): void {
+  adminToken = token;
+  try {
+    if (token) localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    else localStorage.removeItem(ADMIN_TOKEN_KEY);
+  } catch {
+    /* in-memory token still works for this session */
+  }
+}
+
+export function getAdminAuthToken(): string | null {
+  return adminToken;
+}
+
+/** Headers every admin request carries, bearer included. */
+function authHeaders(): Record<string, string> {
+  return adminToken ? { Authorization: `Bearer ${adminToken}` } : {};
+}
+
 function isMutating(method: string): boolean {
   return method !== 'GET' && method !== 'HEAD';
 }
 
 async function refreshAdminCsrf(): Promise<string | null> {
   try {
-    const res = await fetch(apiUrl('admin/me'), { credentials: 'include' });
+    const res = await fetch(apiUrl('admin/me'), { credentials: 'include', headers: authHeaders() });
     const data = await res.json();
     adminCsrf = data.csrf_token ?? null;
     return adminCsrf;
@@ -53,6 +89,8 @@ async function request(method: string, endpoint: string, body?: object | FormDat
       options.body = JSON.stringify(body);
     }
   }
+
+  Object.assign(options.headers as Record<string, string>, authHeaders());
 
   if (isMutating(method) && adminCsrf) {
     (options.headers as Record<string, string>)['X-CSRF-Token'] = adminCsrf;
@@ -81,6 +119,12 @@ async function request(method: string, endpoint: string, body?: object | FormDat
     }
   }
 
+  /* Dead token — drop it, or it would out-rank the VKADMIN cookie forever.
+     See the customer client for the full reasoning. */
+  if (res.status === 401 && adminToken) {
+    setAdminAuthToken(null);
+  }
+
   if (!res.ok) {
     throw new Error(data.error || `Request failed: ${res.status} ${res.statusText}`);
   }
@@ -95,7 +139,7 @@ export const adminApi = {
   delete: (endpoint: string) => request('DELETE', endpoint),
   /** GET a binary/CSV response as a Blob (bypasses JSON parsing). Used by CSV export. */
   csvGet: async (endpoint: string): Promise<Blob> => {
-    const res = await fetch(adminUrl(endpoint), { credentials: 'include' });
+    const res = await fetch(adminUrl(endpoint), { credentials: 'include', headers: authHeaders() });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       let msg = text.trim() || `Request failed: ${res.status} ${res.statusText}`;

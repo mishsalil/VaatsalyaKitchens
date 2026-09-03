@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Loader2, ShieldX, Check } from 'lucide-react';
 import { authApi } from '../../shared/api/endpoints';
+import { setAuthToken } from '../../shared/api/client';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { Button } from '../../shared/components/ui/Button';
 import { PushNudge } from '../../shared/push/PushNudge';
@@ -38,7 +39,11 @@ export function Claim() {
     redeemed.current = true;
     authApi
       .claim(token)
-      .then(async () => {
+      .then(async (data) => {
+        // Redeeming the link signs this device in; keep the token so the
+        // session survives a reload and works in the native app, which never
+        // sends the cookie login_customer() also set.
+        setAuthToken(data?.token ?? null);
         await refresh();
         // Re-bind any EXISTING subscription to the now-known customer. A device
         // that enabled push as a guest has push_subscriptions.customer_id = NULL,

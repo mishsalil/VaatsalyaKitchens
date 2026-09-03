@@ -27,12 +27,15 @@ function route($method, $action, $parts): void
         if ($customer && $customer['pin_hash'] && password_verify($pin, $customer['pin_hash'])) {
             clear_attempts('pin:' . $phone);
             login_customer((int)$customer['id']);
-            Response::json(['user' => [
-                'id'      => (int)$customer['id'],
-                'name'    => $customer['name'],
-                'phone'   => $customer['phone'],
-                'has_pin' => true,
-            ]]);
+            Response::json([
+                'token' => auth_token_issue('customer', (int)$customer['id'], auth_device_label()),
+                'user'  => [
+                    'id'      => (int)$customer['id'],
+                    'name'    => $customer['name'],
+                    'phone'   => $customer['phone'],
+                    'has_pin' => true,
+                ],
+            ]);
         }
 
         record_attempt('pin:' . $phone);
@@ -69,12 +72,15 @@ function route($method, $action, $parts): void
             Response::error('This link is not valid.', 401);
         }
         login_customer($customerId);
-        Response::json(['user' => [
-            'id'      => (int)$customer['id'],
-            'name'    => $customer['name'],
-            'phone'   => $customer['phone'],
-            'has_pin' => $customer['pin_hash'] !== null,
-        ]]);
+        Response::json([
+            'token' => auth_token_issue('customer', $customerId, auth_device_label()),
+            'user'  => [
+                'id'      => (int)$customer['id'],
+                'name'    => $customer['name'],
+                'phone'   => $customer['phone'],
+                'has_pin' => $customer['pin_hash'] !== null,
+            ],
+        ]);
     }
 
     if ($action === 'logout') {
@@ -83,6 +89,10 @@ function route($method, $action, $parts): void
         }
         customer_session_start();
         require_csrf_api($_POST);
+        // Revoke the presented token as well as the session, so signing out on
+        // the native app actually ends that device's access server-side rather
+        // than merely dropping it from local storage.
+        auth_token_revoke(auth_bearer_token());
         logout_customer();
         Response::success('Signed out');
     }

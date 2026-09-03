@@ -232,7 +232,13 @@ function route($method, $action, $parts): void
         }
 
         login_customer($customerId);
-        Response::json(['order_id' => $orderId]);
+        Response::json([
+            'order_id' => $orderId,
+            // Placing an order signs the device in, so hand back a token too —
+            // otherwise a native customer would be "logged in" by a cookie the
+            // WebView never sends and could not open their own order.
+            'token'    => auth_token_issue('customer', $customerId, auth_device_label()),
+        ]);
     }
 
     // --- list ---
