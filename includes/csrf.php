@@ -1,6 +1,8 @@
 <?php
 /* CSRF protection for forms and JSON APIs. Requires an active session. */
 
+require_once __DIR__ . '/tokens.php';
+
 function csrf_token(): string
 {
     if (session_status() !== PHP_SESSION_ACTIVE) {
@@ -27,9 +29,22 @@ function verify_csrf(?string $token): bool
         && hash_equals($_SESSION['csrf_token'], $token);
 }
 
-/** For JSON APIs: verify token from X-CSRF-Token header or "csrf" body field; 403 on failure. */
+/** For JSON APIs: verify token from X-CSRF-Token header or "csrf" body field; 403 on failure.
+ *
+ *  Bearer-authenticated requests are exempt, and safely so. CSRF exists because
+ *  a browser attaches cookies to cross-site requests on its own, letting another
+ *  origin spend the victim's ambient credential. Nothing attaches an
+ *  Authorization header automatically — a hostile page would have to read the
+ *  token first, and if it can do that the site is already lost to XSS and a CSRF
+ *  token would not save it. Without this exemption every mutation from the
+ *  native app would 403, since it has no session to hold a CSRF token in.
+ *
+ *  This whole layer goes away in phase 4, once the web app carries tokens too. */
 function require_csrf_api(array $body): void
 {
+    if (auth_bearer_token() !== null) {
+        return;
+    }
     $token = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? ($body['csrf'] ?? null);
     if (!verify_csrf($token)) {
         json_error('Session expired — please refresh the page and try again.', 403);

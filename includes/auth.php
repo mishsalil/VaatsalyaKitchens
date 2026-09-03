@@ -3,6 +3,7 @@
    (selector:validator pattern — only a hash of the validator is stored). */
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/tokens.php';
 
 const REMEMBER_COOKIE = 'vk_remember';
 const REMEMBER_DAYS   = 180;
@@ -22,7 +23,18 @@ function customer_session_start(): void
     session_start();
 }
 
-/** Returns the logged-in customer row or null. Auto-logs-in from the remember cookie. */
+/** Returns the logged-in customer row or null.
+ *
+ *  Three credentials, tried in order:
+ *    1. Authorization: Bearer — the native app, and the web app from phase 3.
+ *    2. The session cookie.
+ *    3. The remember-me cookie, which also revives the session.
+ *
+ *  A PRESENT BEARER TOKEN IS AUTHORITATIVE. If it is invalid, expired, or names
+ *  someone who no longer exists, this returns null rather than falling back to
+ *  a cookie. Falling back would hide expiry from the native app, which has no
+ *  cookie to fall back to and needs the 401 in order to re-authenticate; on the
+ *  web it could quietly serve a different customer than the token named. */
 function current_customer(): ?array
 {
     static $cached = false;
@@ -31,6 +43,16 @@ function current_customer(): ?array
         return $customer;
     }
     $cached = true;
+
+    $bearer = auth_bearer_token();
+    if ($bearer !== null) {
+        $claim = auth_token_resolve($bearer);
+        // find_customer() fails closed: a token outliving its customer authenticates nobody.
+        $customer = ($claim && $claim['subject_type'] === 'customer')
+            ? find_customer($claim['subject_id'])
+            : null;
+        return $customer;
+    }
 
     customer_session_start();
 
