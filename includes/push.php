@@ -3,6 +3,7 @@
    so the rest of the app works before push is set up. */
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/fcm.php';
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use Minishlink\WebPush\WebPush;
@@ -96,11 +97,22 @@ function push_send(array $subscriptionRows, string $title, string $body, string 
     return [$sent, $failed];
 }
 
+/* The three helpers below fan out to BOTH transports and add up the results.
+   A person is reachable on whatever they happen to have — the browser, the app,
+   or one of each — and the caller should not have to know which. Either
+   transport being unconfigured contributes [0, 0] rather than failing. */
+
 function push_send_to_customer(int $customerId, string $title, string $body, string $url = ''): array
 {
     $stmt = db()->prepare('SELECT * FROM push_subscriptions WHERE customer_id = ?');
     $stmt->execute([$customerId]);
-    return push_send($stmt->fetchAll(), $title, $body, $url);
+    [$sent, $failed] = push_send($stmt->fetchAll(), $title, $body, $url);
+
+    $stmt = db()->prepare('SELECT * FROM fcm_tokens WHERE customer_id = ?');
+    $stmt->execute([$customerId]);
+    [$fSent, $fFailed] = fcm_send($stmt->fetchAll(), $title, $body, $url);
+
+    return [$sent + $fSent, $failed + $fFailed];
 }
 
 /**
@@ -123,11 +135,33 @@ function push_send_to_admins(string $title, string $body, string $url = '', ?int
     $stmt->execute($args);
     // Staff alerts are always urgent — they exist because food is being cooked
     // for an order that no longer exists.
-    return push_send($stmt->fetchAll(), $title, $body, $url, true);
+    [$sent, $failed] = push_send($stmt->fetchAll(), $title, $body, $url, true);
+
+    /* Staff FCM devices. admin_id IS NOT NULL is what separates a counter phone
+       from a customer's: one device row can carry both bindings, and only the
+       admin half should hear kitchen alerts. */
+    $fcmSql = 'SELECT * FROM fcm_tokens WHERE admin_id IS NOT NULL';
+    $fcmArgs = [];
+    if ($excludeAdminId !== null) {
+        $fcmSql .= ' AND admin_id <> ?';
+        $fcmArgs[] = $excludeAdminId;
+    }
+    $stmt = db()->prepare($fcmSql);
+    $stmt->execute($fcmArgs);
+    // Urgent: this is the alert the native app exists for, so it goes out at
+    // high priority on the alarm-volume channel.
+    [$fSent, $fFailed] = fcm_send($stmt->fetchAll(), $title, $body, $url, true);
+
+    return [$sent + $fSent, $failed + $fFailed];
 }
 
 function push_send_broadcast(string $title, string $body, string $url = ''): array
 {
     $rows = db()->query('SELECT * FROM push_subscriptions')->fetchAll();
-    return push_send($rows, $title, $body, $url);
+    [$sent, $failed] = push_send($rows, $title, $body, $url);
+
+    $fcmRows = db()->query('SELECT * FROM fcm_tokens')->fetchAll();
+    [$fSent, $fFailed] = fcm_send($fcmRows, $title, $body, $url);
+
+    return [$sent + $fSent, $failed + $fFailed];
 }
