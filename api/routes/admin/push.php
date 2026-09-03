@@ -46,5 +46,28 @@ function route($method, $action, $parts): void
         Response::success('Unsubscribed');
     }
 
+    /* The Android app's equivalent of subscribe (migration_012), binding the
+       device's FCM token to this staff member so push_send_to_admins() can
+       reach a counter phone.
+
+       It only ever SETS admin_id, never clears it, and leaves customer_id
+       alone: one phone can be a rep's work device and their personal customer
+       account at once, and registering as staff must not sign the customer
+       half out of notifications. */
+    if ($action === 'fcm') {
+        $token = trim((string)($_POST['token'] ?? ''));
+        if ($token === '' || strlen($token) > 255) {
+            Response::error('Invalid token.');
+        }
+        db()->prepare(
+            'INSERT INTO fcm_tokens (token, admin_id, device_label, last_seen_at)
+             VALUES (?, ?, ?, NOW())
+             ON DUPLICATE KEY UPDATE admin_id = VALUES(admin_id),
+                                     device_label = VALUES(device_label),
+                                     last_seen_at = NOW()'
+        )->execute([$token, (int)$admin['id'], auth_device_label()]);
+        Response::success('Registered');
+    }
+
     Response::error('Method not allowed', 405);
 }

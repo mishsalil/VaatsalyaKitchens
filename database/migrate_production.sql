@@ -1,5 +1,5 @@
 -- migrate_production.sql
--- EVERY migration (001-011) in one file. SAFE TO RUN MORE THAN ONCE.
+-- EVERY migration (001-012) in one file. SAFE TO RUN MORE THAN ONCE.
 --
 -- ============================================================================
 -- WHAT THIS IS FOR
@@ -12,7 +12,7 @@
 -- against a database in any state.
 --
 -- ============================================================================
--- WHEN YOU ADD migration_011
+-- WHEN YOU ADD A NEW MIGRATION
 -- ============================================================================
 -- Append it to the bottom of this file too, in guarded form (copy the pattern
 -- of any block below). This file must always be the sum of the numbered ones.
@@ -377,6 +377,32 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 
 
 -- ============================================================================
+-- 012 — FCM registration tokens for the Android app
+--       Web Push tables are shaped for an endpoint + encryption keys; an FCM
+--       token is one opaque string, so it gets its own table rather than
+--       making those columns nullable for everyone.
+--       Two nullable owners: a device may be a guest, a customer, an admin, or
+--       both — and real FKs are kept, SET NULL for customer, CASCADE for admin.
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS fcm_tokens (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  token        VARCHAR(255) NOT NULL,
+  customer_id  INT UNSIGNED NULL,
+  admin_id     INT UNSIGNED NULL,
+  device_label VARCHAR(80) NULL,
+  last_seen_at DATETIME NULL,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_fcm_token (token(191)),
+  KEY idx_fcm_customer (customer_id),
+  KEY idx_fcm_admin (admin_id),
+  CONSTRAINT fk_fcm_customer FOREIGN KEY (customer_id)
+    REFERENCES customers(id) ON DELETE SET NULL,
+  CONSTRAINT fk_fcm_admin FOREIGN KEY (admin_id)
+    REFERENCES admin_users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ============================================================================
 -- VERIFICATION — every row must read OK.
 -- ============================================================================
 SELECT 'orders.branch_id' AS item, IF(COUNT(*) = 1, 'OK', 'MISSING') AS status FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='branch_id'
@@ -410,4 +436,5 @@ UNION ALL SELECT 'table admin_push_subscriptions',  IF(COUNT(*)=1,'OK','MISSING'
 UNION ALL SELECT 'table kitchen_hours',             IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='kitchen_hours'
 UNION ALL SELECT 'table category_hours',            IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='category_hours'
 UNION ALL SELECT 'table auth_tokens',               IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='auth_tokens'
+UNION ALL SELECT 'table fcm_tokens',                IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='fcm_tokens'
 UNION ALL SELECT 'kitchen_hours seeded',            IF(COUNT(*) >= 1,'OK','EMPTY') FROM kitchen_hours;

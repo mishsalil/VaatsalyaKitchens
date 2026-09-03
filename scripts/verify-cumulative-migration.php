@@ -79,7 +79,10 @@ sort($numbered);
 $numbered = array_merge(['schema.sql'], array_values(array_filter($numbered, fn($f) => $f !== 'schema.sql')));
 
 echo "Numbered chain: " . count($numbered) . " files\n";
-run($pdo, 'vk_drift_numbered', $numbered, 'vk_drift_numbered (schema + 001..011)');
+// Label from what was actually globbed, so it cannot go stale the way a
+// hardcoded range does — the same trap the version-pinned filename had.
+$lastMigration = basename(end($numbered));
+run($pdo, 'vk_drift_numbered', $numbered, 'vk_drift_numbered (schema + every migration through ' . $lastMigration . ')');
 
 // Cumulative, run TWICE to prove re-runnability.
 run($pdo, 'vk_drift_cumulative', ['schema.sql', 'database/migrate_production.sql', 'database/migrate_production.sql'], 'vk_drift_cumulative (schema + cumulative x2)');

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback, type React
 import { pushManager, type PushPermission } from './PushManager';
 import { isNativePlatform, registerNativePush, attachNativePushHandlers } from './nativePush';
 import { useAuth } from '../hooks/useAuth';
+import { pushApi } from '../api/endpoints';
 
 interface PushContextValue {
   supported: boolean;
@@ -26,29 +27,35 @@ const DISMISS_KEY = 'vk-push-dismissed';
 const PushContext = createContext<PushContextValue | undefined>(undefined);
 
 export function PushProvider({ children }: { children: ReactNode }) {
-  const { settings } = useAuth();
+  const { user, settings } = useAuth();
   const [state, setState] = useState(() => pushManager.getState());
   const [dismissed, setDismissed] = useState<PushSurface[]>(() => readDismissed());
 
-  // Initialize the SW + push the moment settings (VAPID key) arrive, then make
-  // a silent best-effort subscription attempt on site open.
-  //
-  // The Android shell takes an entirely different route: no service worker and
-  // no VAPID key, because an installed app registers with Google Play services
-  // and receives an FCM token instead. It also does not wait on `settings`,
-  // since none of those values apply to it.
+  // Web Push: initialize the SW the moment settings (VAPID key) arrive, then
+  // make a silent best-effort subscription attempt on site open. The Android
+  // shell skips all of this — it has no service worker and no use for a VAPID
+  // key — and takes the FCM path in the effect below.
   useEffect(() => {
-    if (isNativePlatform()) {
-      attachNativePushHandlers();
-      // Fire-and-forget: registration memoises itself, so the repeat calls this
-      // effect makes are free. Sending the token to the server is the next step.
-      void registerNativePush();
-      return;
-    }
-
+    if (isNativePlatform()) return;   // the app has no service worker to init
     if (!settings?.vapid_public_key || !settings.push_configured) return;
     pushManager.init(settings.vapid_public_key).then(() => pushManager.ensureSubscribed());
   }, [settings?.vapid_public_key, settings?.push_configured]);
+
+  /* Native registration, keyed on WHO is signed in rather than on settings.
+     Registration itself memoises, so the token is fetched once per launch, but
+     it must be re-sent when the customer changes: a guest registers with
+     customer_id NULL, and without this the device would still be nobody's after
+     they signed in — reachable about nothing. Signing out re-sends it as a
+     guest again, which is what should happen on a shared device. */
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    attachNativePushHandlers();
+    registerNativePush().then((token) => {
+      if (!token) return;
+      // Best-effort: a device that cannot register still uses the app fine.
+      pushApi.registerFcm(token).catch(() => {});
+    });
+  }, [user?.id]);
 
   useEffect(() => pushManager.subscribe(setState), []);
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { BellRing, BellOff } from 'lucide-react';
 import { usePush } from '../../shared/push/usePush';
 import { pushManager } from '../../shared/push/PushManager';
+import { isNativePlatform, registerNativePush } from '../../shared/push/nativePush';
 import { adminPushApi } from '../api/endpoints';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { useToast } from '../../shared/context/ToastContext';
@@ -29,9 +30,31 @@ export function StaffAlerts({ variant = 'sidebar' }: { variant?: 'sidebar' | 'ba
   const [registered, setRegistered] = useState(false);
   const attempted = useRef<string | null>(null);
 
+  /* The Android app registers its FCM token instead of a browser subscription:
+     it has no service worker, and `supported`/`permission` describe Web Push,
+     which does not exist there. Keyed by admin id for the same reason as below
+     — a shared counter phone must re-bind to whoever is on shift now.
+
+     This only ever sets admin_id server-side; it never clears customer_id, so a
+     rep signing in at the counter does not stop their own customer
+     notifications on the same phone. */
+  useEffect(() => {
+    if (!isNativePlatform() || !admin) return;
+    registerNativePush().then((token) => {
+      if (!token) return;
+      adminPushApi
+        .registerFcm(token)
+        .then(() => setRegistered(true))
+        .catch(() => {
+          /* silent — the banner below covers the visible failure modes */
+        });
+    });
+  }, [admin?.id]);
+
   // Auto-register whenever permission already exists. Keyed by admin id so a
   // shared device re-binds to whoever is signed in now.
   useEffect(() => {
+    if (isNativePlatform()) return;   // handled by the FCM effect above
     if (!supported || !admin || permission !== 'granted') return;
     const key = String(admin.id);
     if (attempted.current === key) return;
@@ -48,7 +71,24 @@ export function StaffAlerts({ variant = 'sidebar' }: { variant?: 'sidebar' | 'ba
     })();
   }, [supported, admin, permission]);
 
-  if (!supported || !admin) return null;
+  if (!admin) return null;
+
+  /* On Android the Web Push signals below are meaningless — the WebView may
+     well report serviceWorker and PushManager as present while `permission`
+     stays 'default', which would show staff an "enable alerts" banner for a
+     device that is already registered with FCM. So the app reports only the
+     state the FCM effect actually established, and never offers the browser
+     permission flow, which cannot help it. */
+  if (isNativePlatform()) {
+    if (!registered || variant !== 'sidebar') return null;
+    return (
+      <p className="flex items-center gap-1.5 px-3 text-[11px] font-medium text-emerald-600">
+        <BellRing className="h-3.5 w-3.5" /> Alerts on
+      </p>
+    );
+  }
+
+  if (!supported) return null;
   if (permission === 'granted' && registered) {
     return variant === 'sidebar' ? (
       <p className="flex items-center gap-1.5 px-3 text-[11px] font-medium text-emerald-600">

@@ -40,4 +40,6 @@ export const pushApi = {
   subscribe: (subscription: { endpoint: string; keys: { p256dh: string; auth: string } }) =>
     api.post('push/subscribe', { subscription }),
   unsubscribe: (endpoint: string) => api.post('push/unsubscribe', { endpoint }),
+  /** Android app: register this device's FCM token against the current customer. */
+  registerFcm: (token: string) => api.post('push/fcm', { token }),
 };

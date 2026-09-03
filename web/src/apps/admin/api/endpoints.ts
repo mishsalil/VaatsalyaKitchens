@@ -225,6 +225,8 @@ export const adminSettingsApi = {
 export const adminPushApi = {
   subscribe: (subscription: unknown) => adminApi.post('push/subscribe', { subscription }),
   unsubscribe: (endpoint: string) => adminApi.post('push/unsubscribe', { endpoint }),
+  /** Android app: bind this device's FCM token to the signed-in staff member. */
+  registerFcm: (token: string) => adminApi.post('push/fcm', { token }),
 };
 
 export const adminBroadcastApi = {
