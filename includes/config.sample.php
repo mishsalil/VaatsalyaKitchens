@@ -33,4 +33,10 @@ return [
     // Default branch id (multi-branch readiness). Storefront treats this as
     // the current branch; branches live in the `branches` table.
     'default_branch_id' => 1,
+
+    // Extra origins allowed to call the API cross-origin, on top of the
+    // Capacitor and local-dev origins the API already allows. The web app is
+    // same-origin and needs no entry here. Exact strings, scheme included —
+    // they are matched literally, never as patterns.
+    'cors_origins' => [],
 ];
