@@ -1,4 +1,5 @@
 import { apiUrl } from '../lib/baseUrl';
+import { mirrorAuthToken } from '../lib/tokenMirror';
 
 /**
  * Customer API client. Authentication is a bearer token, nothing else.
@@ -32,6 +33,12 @@ function readStoredToken(): string | null {
 
 let authToken: string | null = readStoredToken();
 
+/* Keep the service worker's copy in step from the very first load, not only on
+   sign-in: a device that signed in before this mirror existed would otherwise
+   never write one, and its rotated subscriptions would keep landing against
+   nobody. Writing the same value twice is harmless. */
+void mirrorAuthToken(authToken);
+
 export function setAuthToken(token: string | null): void {
   authToken = token;
   try {
@@ -40,6 +47,10 @@ export function setAuthToken(token: string | null): void {
   } catch {
     /* in-memory token still works for this session */
   }
+  /* The service worker cannot read localStorage, so it reads this instead when
+     the browser rotates a push subscription. Fire-and-forget: the app never
+     reads the mirror back, and a storage failure must not break signing in. */
+  void mirrorAuthToken(token);
 }
 
 export function getAuthToken(): string | null {

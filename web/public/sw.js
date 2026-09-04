@@ -174,11 +174,66 @@ self.addEventListener('pushsubscriptionchange', (event) => {
   );
 });
 
+/* The customer's bearer token, mirrored into IndexedDB by the page (see
+   src/apps/shared/lib/tokenMirror.ts).
+
+   A service worker has no window, so it cannot read localStorage where the app
+   keeps the token — and there is no cookie any more. Without this, a
+   re-registration below would arrive unauthenticated and the rotated
+   subscription would be stored against nobody, quietly making that customer
+   unreachable until they next opened the app.
+
+   Resolves null rather than throwing: an anonymous re-registration still keeps
+   the device subscribed, which is what a guest gets anyway. */
+const AUTH_DB = 'vk-auth';
+const AUTH_DB_VERSION = 1;
+const AUTH_STORE = 'auth';
+const AUTH_KEY = 'customer_token';
+
+function readAuthToken() {
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(AUTH_DB, AUTH_DB_VERSION);
+      // Do NOT create the store here: if the page has never written a token
+      // there is nothing to read, and creating it would only race the page.
+      req.onupgradeneeded = () => {
+        try {
+          if (!req.result.objectStoreNames.contains(AUTH_STORE)) req.result.createObjectStore(AUTH_STORE);
+        } catch { /* ignore */ }
+      };
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(AUTH_STORE)) {
+          db.close();
+          resolve(null);
+          return;
+        }
+        try {
+          const get = db.transaction(AUTH_STORE, 'readonly').objectStore(AUTH_STORE).get(AUTH_KEY);
+          get.onsuccess = () => { resolve(get.result || null); db.close(); };
+          get.onerror = () => { resolve(null); db.close(); };
+        } catch {
+          db.close();
+          resolve(null);
+        }
+      };
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+async function authHeaders() {
+  const token = await readAuthToken();
+  return token ? { Authorization: 'Bearer ' + token } : {};
+}
+
 async function sendSubscription(subscription, oldEndpoint) {
   await fetch('/api/push/subscribe', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({ subscription: subscription.toJSON() }),
   });
   if (oldEndpoint) await unsubscribeEndpoint(oldEndpoint).catch(() => {});
@@ -187,8 +242,7 @@ async function sendSubscription(subscription, oldEndpoint) {
 async function unsubscribeEndpoint(endpoint) {
   await fetch('/api/push/unsubscribe', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
     body: JSON.stringify({ endpoint }),
   });
 }
