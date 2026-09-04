@@ -1,0 +1,120 @@
+name: Deploy to Hostinger
+
+# Manual only, deliberately. Migrations are run by hand and must land BEFORE
+# the code — main authenticates with bearer tokens and needs auth_tokens, so a
+# deploy that races a migration breaks every login. Pressing the button is the
+# moment to confirm the migration verification table read OK.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — list what WOULD change, transfer nothing'
+        type: boolean
+        default: true
+      migrations_done:
+        description: 'I have run database/migrate_production.sql and every row read OK'
+        type: boolean
+        default: false
+
+# One deploy at a time; a second run waits rather than interleaving files.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Refuse to deploy before migrations
+        # Not a substitute for judgement — just a pause. Untick dry_run AND
+        # tick migrations_done, so shipping schema-dependent code takes two
+        # deliberate acts rather than one distracted click.
+        if: ${{ inputs.dry_run == false && inputs.migrations_done == false }}
+        run: |
+          echo "::error::Confirm migrations have been applied, or run with dry_run enabled."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # Hostinger shared hosting has no Node, which is the whole reason this
+      # pipeline exists: the bundle is built here and only the output ships.
+      - name: Build the web bundle
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: Fail if the build produced nothing
+        run: |
+          test -f web/dist/index.html || { echo "::error::web/dist/index.html missing — build failed silently"; exit 1; }
+          test -d web/dist/assets     || { echo "::error::web/dist/assets missing"; exit 1; }
+
+      # Assemble the web root exactly as the server should look. vendor/ is
+      # committed, so there is no Composer step.
+      - name: Stage the web root
+        run: |
+          mkdir -p deploy
+          cp -r web/dist/.       deploy/
+          cp -r api              deploy/
+          cp -r includes         deploy/
+          cp -r vendor           deploy/
+          cp -r scripts          deploy/
+          cp .htaccess           deploy/
+          # Never ships: config.php is gitignored and lives only on the server,
+          # but delete defensively in case someone commits one by mistake.
+          rm -f deploy/includes/config.php
+          echo "staged $(find deploy -type f | wc -l) files"
+
+      - name: Add the SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync to Hostinger
+        # --delete removes files the build no longer produces, so old hashed
+        # assets do not pile up forever. Excluded paths are protected from that
+        # deletion by rsync, which is what keeps the two irreplaceable things
+        # safe: the server's own config.php, and the uploaded branding/ logo.
+        run: |
+          rsync -rlvz ${{ inputs.dry_run && '--dry-run' || '' }} --delete \
+            --exclude 'includes/config.php' \
+            --exclude 'branding/' \
+            --exclude '.well-known/' \
+            --exclude '.htpasswd' \
+            --exclude 'cgi-bin/' \
+            -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=accept-new" \
+            deploy/ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
+
+      # A 200 is not proof: a PHP fatal is served as HTML with status 200, which
+      # is exactly how a database being unreachable once rendered as an empty
+      # menu. Assert the content type instead.
+      - name: Smoke test the live site
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          BASE="${{ secrets.SITE_URL }}"
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")
+          echo "GET / -> $code"
+          [ "$code" = "200" ] || { echo "::error::storefront returned $code"; exit 1; }
+
+          type=$(curl -s -o /tmp/menu.json -w '%{content_type}' "$BASE/api/menu")
+          echo "GET /api/menu -> $type"
+          case "$type" in
+            application/json*) ;;
+            *) echo "::error::/api/menu returned '$type', not JSON — the API is erroring (check config.php and the database)"; head -c 300 /tmp/menu.json; exit 1 ;;
+          esac
+
+          python3 -c "import json,sys; d=json.load(open('/tmp/menu.json')); print('menu items:', len(d.get('items', [])))"
+
+      - name: Clean up the key
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519
