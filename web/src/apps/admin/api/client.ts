@@ -64,16 +64,31 @@ async function request(method: string, endpoint: string, body?: object | FormDat
   const res = await fetch(url, options);
   const text = await res.text();
   let data: any;
+  let parsed = true;
   try {
     data = JSON.parse(text);
   } catch {
-    data = { error: text.trim() || `Request failed: ${res.status} ${res.statusText}` };
+    parsed = false;
   }
 
   /* Dead token — drop it so the app lands on the sign-in screen rather than
      retrying a credential that cannot work. */
   if (res.status === 401 && adminToken) {
     setAdminAuthToken(null);
+  }
+
+  /* Not JSON means the request never reached a route handler — a PHP fatal is
+     served as HTML with status 200. Treating that as success hands the caller
+     an object with none of the fields it expects, which surfaces as an empty
+     screen rather than an error. See the customer client for the full note.
+     The body is logged, not shown: it can carry absolute server paths. */
+  if (!parsed) {
+    console.error('[admin api] non-JSON response', res.status, url, text.slice(0, 500));
+    throw new Error(
+      res.ok
+        ? 'Something went wrong at our end. Please try again in a moment.'
+        : `Request failed: ${res.status} ${res.statusText}`,
+    );
   }
 
   if (!res.ok) {
@@ -93,13 +108,24 @@ export const adminApi = {
     const res = await fetch(adminUrl(endpoint), { headers: authHeaders() });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
-      let msg = text.trim() || `Request failed: ${res.status} ${res.statusText}`;
+      // Only surface a server message when it is a JSON error envelope; a raw
+      // body here can be an HTML fatal carrying absolute server paths.
+      let msg = `Request failed: ${res.status} ${res.statusText}`;
       try {
         msg = JSON.parse(text).error || msg;
       } catch {
-        /* keep text message */
+        /* keep the status message */
       }
       throw new Error(msg);
+    }
+
+    /* A 200 is not enough: a PHP fatal is HTML with status 200, and without
+       this the export would "succeed" and hand the user a .csv containing an
+       error page. Content-Disposition is what the export route sets. */
+    const type = res.headers.get('Content-Type') || '';
+    if (type.includes('text/html')) {
+      console.error('[admin api] export returned HTML instead of CSV', adminUrl(endpoint));
+      throw new Error('The export could not be generated. Please try again in a moment.');
     }
     return res.blob();
   },

@@ -65,10 +65,11 @@ async function request(method: string, endpoint: string, body?: object | FormDat
   const res = await fetch(url, options);
   const text = await res.text();
   let data: any;
+  let parsed = true;
   try {
     data = JSON.parse(text);
   } catch {
-    data = { error: text.trim() || `Request failed: ${res.status} ${res.statusText}` };
+    parsed = false;
   }
 
   /* A 401 while holding a token means the token is dead — expired, revoked, or
@@ -76,6 +77,24 @@ async function request(method: string, endpoint: string, body?: object | FormDat
      clean signed-out state instead of retrying a credential that cannot work. */
   if (res.status === 401 && authToken) {
     setAuthToken(null);
+  }
+
+  /* A body that is not JSON is a failure however the status reads.
+     This API answers JSON on every path, so anything else means the request
+     never reached a route handler — a PHP fatal, which is emitted as HTML with
+     status 200, or a proxy or captive portal answering instead. Treating that
+     as success is what once rendered a whole menu as an empty page with no
+     error at all, because `data.items` was simply undefined.
+
+     The raw body is logged, never shown: a PHP fatal includes absolute server
+     paths, and a customer should not be reading those. */
+  if (!parsed) {
+    console.error('[api] non-JSON response', res.status, url, text.slice(0, 500));
+    throw new Error(
+      res.ok
+        ? 'Something went wrong at our end. Please try again in a moment.'
+        : `Request failed: ${res.status} ${res.statusText}`,
+    );
   }
 
   if (!res.ok) {
