@@ -51,10 +51,23 @@
   }
 }
 
-/* Respect the iOS home-indicator / status bar for the sticky cart + nav bars. */
+/* Keep the sticky header and bottom nav clear of the status bar, the camera
+   cutout and the gesture bar.
+
+   TWO SOURCES, DELIBERATELY. env() is the standard and is what a browser and
+   iOS answer. Android WebView returns 0 for env() until version 140
+   (crbug 40699457), so on a phone with an older WebView the header slid under
+   the status bar and the bottom nav under the gesture bar — which is visible
+   on a real device and NOT on an emulator carrying a newer WebView. Because
+   the app targets SDK 36, Android draws edge-to-edge and there is no opting
+   out of it.
+
+   Capacitor works around that by setting --safe-area-inset-* on <html>, so we
+   read that first and fall back to env(). In a browser the variable is not
+   defined and env() answers; in the app the variable wins. */
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
 }
 .pt-safe {
-  padding-top: env(safe-area-inset-top, 0);
+  padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
 }

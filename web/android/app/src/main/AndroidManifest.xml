@@ -40,6 +40,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- "Use my current location" on the address picker. The page calls
+         navigator.geolocation; Capacitor's BridgeWebChromeClient answers the
+         WebView's prompt by requesting these two at runtime. Android refuses a
+         runtime request for a permission that is not declared here, and refuses
+         it SILENTLY — no dialog, an immediate denial — which is why the button
+         appeared to do nothing at all in the app while working on the web. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <!-- Notifications. POST_NOTIFICATIONS is a runtime permission from Android
          13; the Capacitor push plugin asks for it at registration time. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
