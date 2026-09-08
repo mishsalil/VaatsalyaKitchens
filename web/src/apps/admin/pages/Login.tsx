@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
-import { ShieldCheck, User, KeyRound } from 'lucide-react';
+import { useNavigate, Navigate, Link } from 'react-router-dom';
+import { ShieldCheck, User, KeyRound, ArrowLeft } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { Input } from '../../shared/components/ui/Input';
 import { Field } from '../../shared/components/ui/Field';
@@ -93,6 +93,16 @@ export function AdminLogin() {
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+
+        {/* The way back. On the web a customer could use the browser's back
+            button; the Android app has no address bar and no visible chrome, so
+            without this a customer who tapped "Staff sign in" out of curiosity
+            would be stranded on a login screen they cannot use. */}
+        <p className="mt-6 text-center">
+          <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-500 hover:text-brand-800">
+            <ArrowLeft className="h-4 w-4" /> Back to Vaatsalya Kitchens
+          </Link>
+        </p>
       </div>
     </div>
   );
