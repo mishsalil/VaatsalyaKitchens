@@ -229,6 +229,16 @@ export const adminPushApi = {
   registerFcm: (token: string) => adminApi.post('push/fcm', { token }),
 };
 
+export const adminMenuImageApi = {
+  /** Upload a dish photo. `file` should already be resized — see resizeForUpload. */
+  upload: (itemId: number, file: Blob) => {
+    const body = new FormData();
+    body.append('image', file, 'dish.webp');
+    return adminApi.post(`menu/upload_image/${itemId}`, body) as Promise<{ url: string }>;
+  },
+  remove: (itemId: number) => adminApi.post(`menu/delete_image/${itemId}`, {}),
+};
+
 export const adminBroadcastApi = {
   get: () => adminApi.get('broadcast') as Promise<{ subscribers: number; push_configured: boolean }>,
   send: (data: { title: string; body: string; url?: string }) =>

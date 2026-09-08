@@ -502,6 +502,29 @@ function route($method, $action, $parts): void
         Response::success('Deleted');
     }
 
+    /* --- dish photo (multipart: image=file) -----------------------------------
+       Stored as a plain file at /menu/{id}.{ext}, which is where DishImage
+       already looks — so there is no column, no join, and nothing to keep in
+       step with the database. Deleting the item leaves an orphan file, which
+       costs a few KB and never shows, and that is a better trade than a schema
+       that can disagree with the disk. */
+    if ($action === 'upload_image') {
+        $id = (int)($parts[3] ?? 0);
+        if (!item_exists($id)) {
+            Response::error('Item not found.', 404);
+        }
+        Response::json(['url' => save_dish_image($id)]);
+    }
+
+    if ($action === 'delete_image') {
+        $id = (int)($parts[3] ?? 0);
+        if (!item_exists($id)) {
+            Response::error('Item not found.', 404);
+        }
+        delete_dish_images($id);
+        Response::success('Photo removed');
+    }
+
     if ($action === 'reorder_items') {
         $ids = normalize_int_list($_POST['ids'] ?? []);
         if (!$ids) {
@@ -814,4 +837,96 @@ function read_csv_with_header(string $field): array
         $rows[] = $cells;
     }
     return ['columns' => $columns, 'rows' => $rows];
+}
+/* --- dish photos ------------------------------------------------------------
+   Files, not a database column: DishImage already resolves /menu/{id}.webp and
+   falls back gracefully, so a photo is present exactly when its file is.
+
+   WHERE THEY LIVE. In a checkout, web/public/menu is what Vite serves and what
+   the build copies, so writing there means an upload shows up immediately in
+   development. On the server there is no web/ directory — the deploy ships the
+   built bundle, so /menu sits directly under the document root. Detecting which
+   of the two exists is what lets the same endpoint work in both places, and the
+   deploy excludes menu/ from --delete so uploads survive.
+
+   NO SERVER-SIDE RESIZE, because neither GD nor Imagick is guaranteed here
+   (this machine has neither). The admin shrinks the picture in the browser
+   before sending it, which also spares a counter phone from uploading four
+   megabytes over mobile data. The limit below is the backstop for anything that
+   arrives unshrunk. */
+
+const DISH_IMAGE_EXTS = ['webp', 'jpg', 'png'];
+
+function dish_image_dir(): string
+{
+    $checkout = __DIR__ . '/../../../web/public/menu';
+    if (is_dir($checkout)) {
+        return $checkout;
+    }
+    $root = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), "/\\");
+    if ($root === '') {
+        Response::error('Cannot determine where to store the photo.', 500);
+    }
+    return $root . '/menu';
+}
+
+/** Remove every stored photo for an item, whatever its extension. */
+function delete_dish_images(int $id): void
+{
+    $dir = dish_image_dir();
+    foreach (DISH_IMAGE_EXTS as $ext) {
+        $path = "$dir/$id.$ext";
+        if (is_file($path)) {
+            @unlink($path);
+        }
+    }
+}
+
+/** Validate and store an uploaded dish photo. Returns its URL path. */
+function save_dish_image(int $id): string
+{
+    if (empty($_FILES['image']) || ($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+        Response::error('Please choose a photo.');
+    }
+    $f = $_FILES['image'];
+    if (($f['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+        Response::error('Upload failed. Please try a smaller photo.');
+    }
+    if ($f['size'] > 3 * 1024 * 1024) {
+        Response::error('Photo must be 3 MB or smaller.');
+    }
+
+    // Trust finfo over the client-supplied type, as the logo upload does.
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $extByMime = ['image/webp' => 'webp', 'image/jpeg' => 'jpg', 'image/png' => 'png'];
+    $mime = $finfo->file($f['tmp_name']);
+    if (!isset($extByMime[$mime])) {
+        Response::error('Photo must be a WebP, JPG or PNG.');
+    }
+    $ext = $extByMime[$mime];
+
+    /* getimagesize is core PHP and needs no GD. It is used here to confirm the
+       file really decodes as an image — a MIME type alone can be forged by
+       prefixing image bytes to something else. */
+    $size = @getimagesize($f['tmp_name']);
+    if ($size === false || $size[0] < 1 || $size[1] < 1) {
+        Response::error('That file is not a readable image.');
+    }
+    if ($size[0] > 4000 || $size[1] > 4000) {
+        Response::error('Photo is too large. Please use one under 4000 pixels.');
+    }
+
+    $dir = dish_image_dir();
+    if (!is_dir($dir) && !@mkdir($dir, 0775, true)) {
+        Response::error('Could not create the photo directory.', 500);
+    }
+
+    // One photo per item: clear the other extensions so a stale .jpg cannot
+    // outrank a new .webp, which DishImage would find first.
+    delete_dish_images($id);
+
+    if (!move_uploaded_file($f['tmp_name'], "$dir/$id.$ext")) {
+        Response::error('Could not save the photo.', 500);
+    }
+    return "/menu/$id.$ext";
 }

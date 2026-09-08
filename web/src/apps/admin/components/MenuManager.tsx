@@ -12,6 +12,7 @@ import { rupees } from '../../shared/lib/format';
 import { sampleMenuCsv } from '../../shared/lib/sampleCsv';
 import { adminMenuApi, adminHoursApi, type AdminItemPayload, type AdminHourWindow } from '../api/endpoints';
 import { HoursEditor } from './HoursEditor';
+import { DishPhotoButton } from './DishPhotoButton';
 import type { AdminMenuCategory, AdminMenuSubcategory, AdminMenuItem } from '../types';
 import { ItemFormModal } from './ItemFormModal';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -325,6 +326,7 @@ export function MenuManager() {
             <ArrowDown className="h-3.5 w-3.5" />
           </button>
         </div>
+        <DishPhotoButton itemId={it.id} itemName={it.name} />
         <div className="flex-1">
           <p className={`text-sm font-semibold ${it.available ? 'text-brand-900' : 'text-brand-400 line-through'}`}>
             {it.name}

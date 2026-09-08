@@ -82,12 +82,16 @@ jobs:
       - name: Sync to Hostinger
         # --delete removes files the build no longer produces, so old hashed
         # assets do not pile up forever. Excluded paths are protected from that
-        # deletion by rsync, which is what keeps the two irreplaceable things
-        # safe: the server's own config.php, and the uploaded branding/ logo.
+        # deletion by rsync, which is what keeps the irreplaceable things safe:
+        # the server's own config.php, the uploaded branding/ logo, and menu/,
+        # where dish photos uploaded through the admin live. Those photos exist
+        # only on the server — without this exclusion every deploy would delete
+        # the ones added since the last build.
         run: |
           rsync -rlvz ${{ inputs.dry_run && '--dry-run' || '' }} --delete \
             --exclude 'includes/config.php' \
             --exclude 'branding/' \
+            --exclude 'menu/' \
             --exclude '.well-known/' \
             --exclude '.htpasswd' \
             --exclude 'cgi-bin/' \
