@@ -8,6 +8,11 @@ import { OrderSuccess } from './apps/storefront/pages/OrderSuccess';
 import { MyAccount } from './apps/storefront/pages/MyAccount';
 import { Login } from './apps/storefront/pages/Login';
 import { Claim } from './apps/storefront/pages/Claim';
+import { Privacy } from './apps/storefront/legal/Privacy';
+import { Terms } from './apps/storefront/legal/Terms';
+import { Refunds } from './apps/storefront/legal/Refunds';
+import { Shipping } from './apps/storefront/legal/Shipping';
+import { ContactUs } from './apps/storefront/legal/ContactUs';
 import { RequireAuth } from './apps/shared/components/RequireAuth';
 
 // The entire admin area is one lazy chunk — the customer storefront bundle
@@ -44,6 +49,14 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         {/* One-time claim link from a counter order (WhatsApped by the rep). */}
         <Route path="/claim/:token" element={<Claim />} />
+
+        {/* Policy pages. Plain routes, not lazy: a payment-gateway reviewer and
+            a search crawler must both get the content on the first request. */}
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/refunds" element={<Refunds />} />
+        <Route path="/shipping" element={<Shipping />} />
+        <Route path="/contact" element={<ContactUs />} />
         <Route
           path="/account"
           element={

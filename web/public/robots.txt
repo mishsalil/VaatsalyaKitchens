@@ -1,0 +1,14 @@
+# Vaatsalya Kitchens
+
+User-agent: *
+Allow: /
+
+# Nothing here is useful to a search engine, and some of it is private.
+Disallow: /admin
+Disallow: /account
+Disallow: /checkout
+Disallow: /order-success
+Disallow: /claim
+Disallow: /api/
+
+Sitemap: https://REPLACE-WITH-YOUR-DOMAIN/sitemap.xml

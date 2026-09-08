@@ -116,17 +116,29 @@ export function CustomerLayout() {
         </div>
       </nav>
 
-      {/* Minimal footer */}
-      <footer className="hidden border-t border-cream-200 bg-white px-4 py-6 text-sm text-brand-500 sm:block">
-        <div className="container-wide flex flex-wrap items-center justify-between gap-3">
-          <p>
-            <span className="font-devanagari text-brand-700" lang="hi">वात्सल्य</span> Kitchens — food made with the warmth of home.
-          </p>
-          {!loading && settings && (
-            <a href={`tel:+${settings.kitchen_whatsapp}`} className="link-quiet inline-flex items-center gap-1.5 font-medium">
-              <Phone className="h-4 w-4 text-gold-600" /> {settings.kitchen_phone_display}
-            </a>
-          )}
+      {/* Footer. Shown on phones too: the policy links below have to be
+          reachable from every page on every device — a payment gateway checks
+          for them, and a customer is entitled to find them. The extra bottom
+          padding on small screens clears the fixed bottom nav. */}
+      <footer className="border-t border-cream-200 bg-white px-4 pb-28 pt-6 text-sm text-brand-500 sm:pb-6">
+        <div className="container-wide space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p>
+              <span className="font-devanagari text-brand-700" lang="hi">वात्सल्य</span> Kitchens — food made with the warmth of home.
+            </p>
+            {!loading && settings && (
+              <a href={`tel:+${settings.kitchen_whatsapp}`} className="link-quiet inline-flex items-center gap-1.5 font-medium">
+                <Phone className="h-4 w-4 text-gold-600" /> {settings.kitchen_phone_display}
+              </a>
+            )}
+          </div>
+          <nav className="flex flex-wrap gap-x-4 gap-y-2 border-t border-cream-100 pt-4 text-xs">
+            <Link to="/contact" className="link-quiet">Contact Us</Link>
+            <Link to="/terms" className="link-quiet">Terms &amp; Conditions</Link>
+            <Link to="/privacy" className="link-quiet">Privacy Policy</Link>
+            <Link to="/refunds" className="link-quiet">Cancellation &amp; Refund Policy</Link>
+            <Link to="/shipping" className="link-quiet">Shipping &amp; Delivery Policy</Link>
+          </nav>
         </div>
       </footer>
     </div>
