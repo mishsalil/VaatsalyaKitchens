@@ -65,8 +65,17 @@ public final class NotificationChannels {
         urgent.setBypassDnd(true);
         urgent.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
 
-        // Alarm usage: plays at alarm volume, so a phone with the ringer down
-        // still sounds. This is the part that works without any special grant.
+        /* Alarm usage means the sound plays at ALARM volume rather than
+           notification volume, so a counter phone with its notification volume
+           turned down is still loud.
+           WHAT IT DOES NOT DO, measured on a Galaxy S24 (Android 16, One UI
+           8.0.5): it does not survive ringer mode. With the phone on vibrate,
+           NotificationManager substitutes a vibration and never plays the
+           sound at all — the posted notification carries sound=null and the
+           log shows only a VibrationAttributes{mUsage=NOTIFICATION} buzz.
+           Usage picks the volume stream; it does not exempt a notification
+           from the ringer. A device that must be audible on silent has to play
+           the alarm itself rather than leave it to the notification. */
         Uri alarm = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
         if (alarm == null) {
             alarm = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
