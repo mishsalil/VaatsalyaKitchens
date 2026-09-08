@@ -242,23 +242,28 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
             <ul className="mt-2 space-y-2">
               {variants.map((v, i) => (
                 <li key={i} className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <label className="flex shrink-0 items-center gap-1 text-xs text-brand-500" title="Default size">
-                      <input
-                        type="radio"
-                        name="variant-default"
-                        checked={v.isDefault}
-                        onChange={() => setDefaultVariant(i)}
-                        className="accent-brand-900"
+                  {/* The name gets a line of its own. Sharing one with the
+                      delta, the total and the delete button left it 2px wide —
+                      the modal is max-w-md at every screen size, so this was
+                      never only a phone problem. */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex w-full items-center gap-2">
+                      <label className="flex shrink-0 items-center gap-1 text-xs text-brand-500" title="Default size">
+                        <input
+                          type="radio"
+                          name="variant-default"
+                          checked={v.isDefault}
+                          onChange={() => setDefaultVariant(i)}
+                          className="accent-brand-900"
+                        />
+                      </label>
+                      <Input
+                        value={v.name}
+                        invalid={!!variantErrs[i]}
+                        onChange={(e) => updateVariant(i, { name: e.target.value })}
+                        placeholder="e.g. Full"
                       />
-                    </label>
-                    <Input
-                      value={v.name}
-                      invalid={!!variantErrs[i]}
-                      onChange={(e) => updateVariant(i, { name: e.target.value })}
-                      placeholder="e.g. Full"
-                      className="flex-1"
-                    />
+                    </div>
                     <Input
                       value={v.delta}
                       invalid={!!variantErrs[i]}
@@ -301,13 +306,13 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
             <ul className="mt-2 space-y-2">
               {addons.map((a, i) => (
                 <li key={i} className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Input
                       value={a.name}
                       invalid={!!addonErrs[i]}
                       onChange={(e) => updateAddon(i, { name: e.target.value })}
                       placeholder="e.g. Extra cheese"
-                      className="flex-1"
+                      className="basis-full"
                     />
                     <Input
                       value={a.price}
