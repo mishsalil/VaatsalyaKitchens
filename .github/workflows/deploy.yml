@@ -98,6 +98,26 @@ jobs:
             -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=accept-new" \
             deploy/ "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/"
 
+      # The sync above excludes menu/ and branding/ so --delete can never remove
+      # a photo or a logo uploaded through the admin, which exist only on the
+      # server. That same exclusion, though, means the committed seed photos
+      # would never arrive at all — which is exactly what happened on the first
+      # deploy: every /menu/*.webp fell through to the SPA's index.html.
+      #
+      # So they come over separately, with --ignore-existing and no --delete:
+      # a file missing on the server is added, a file already there is left
+      # alone. An admin upload therefore always wins over the committed copy,
+      # and nothing here can delete anything.
+      - name: Seed photos and branding that are not on the server yet
+        run: |
+          for dir in menu branding; do
+            [ -d "deploy/$dir" ] || { echo "no deploy/$dir to send"; continue; }
+            echo "--- $dir ---"
+            rsync -rlvz ${{ inputs.dry_run && '--dry-run' || '' }} --ignore-existing \
+              -e "ssh -p ${{ secrets.SSH_PORT }} -o StrictHostKeyChecking=accept-new" \
+              "deploy/$dir/" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}/$dir/"
+          done
+
       # A 200 is not proof: a PHP fatal is served as HTML with status 200, which
       # is exactly how a database being unreachable once rendered as an empty
       # menu. Assert the content type instead.
@@ -118,6 +138,20 @@ jobs:
           esac
 
           python3 -c "import json,sys; d=json.load(open('/tmp/menu.json')); print('menu items:', len(d.get('items', [])))"
+
+          # A missing photo does not 404 — .htaccess falls back to index.html,
+          # so a broken image URL answers 200 text/html and looks fine. Assert
+          # the content type of a photo we actually shipped.
+          photo=$(ls deploy/menu/*.webp 2>/dev/null | head -1)
+          if [ -n "$photo" ]; then
+            name=$(basename "$photo")
+            ptype=$(curl -s -o /dev/null -w '%{content_type}' "$BASE/menu/$name")
+            echo "GET /menu/$name -> $ptype"
+            case "$ptype" in
+              image/*) ;;
+              *) echo "::error::/menu/$name returned '$ptype', not an image — dish photos did not reach the server"; exit 1 ;;
+            esac
+          fi
 
       - name: Clean up the key
         if: always()
