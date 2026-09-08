@@ -117,7 +117,9 @@ function fcm_access_token(): ?string
 }
 
 /**
- * Send to a set of fcm_tokens rows. Returns [sent, failed].
+ * Send to a set of fcm_tokens rows. Returns [sent, failed, reasons], where
+ * reasons carries one entry per failure: a token prefix, the HTTP status, the
+ * FCM error code, and whether the token was pruned as dead.
  *
  * Tokens Google reports as dead are DELETED, mirroring how push_send() prunes
  * gone endpoints. A device that reinstalls the app gets a new token and the old
@@ -140,6 +142,7 @@ function fcm_send(array $tokenRows, string $title, string $body, string $url = '
     $sent = 0;
     $failed = 0;
     $dead = [];
+    $reasons = [];
 
     foreach ($tokenRows as $row) {
         $token = (string)($row['token'] ?? '');
@@ -199,12 +202,26 @@ function fcm_send(array $tokenRows, string $title, string $body, string $url = '
         $err = json_decode((string)$response, true);
         $reason = $err['error']['details'][0]['errorCode'] ?? ($err['error']['status'] ?? '');
 
+        /* Kept so a caller can say WHY, not just how many. Without this a
+           failed send reads as "failed=1" and the reason is only in the PHP
+           error log, which on shared hosting is awkward to reach — so a dead
+           token and a malformed payload look identical from the outside.
+           Only a token prefix: enough to tell devices apart in output, never
+           the whole credential. */
+        $reasons[] = [
+            'token'  => substr($token, 0, 12) . '…',
+            'status' => $status,
+            'reason' => $reason ?: 'unknown',
+            'dead'   => false,
+        ];
+
         /* UNREGISTERED: the app was uninstalled or the token rotated.
            INVALID_ARGUMENT on a 400 means the token is malformed.
            Both are permanent — retrying them forever is how a send loop slows
            to a crawl as dead devices accumulate. */
         if ($status === 404 || $reason === 'UNREGISTERED' || ($status === 400 && $reason === 'INVALID_ARGUMENT')) {
             $dead[] = $token;
+            $reasons[count($reasons) - 1]['dead'] = true;
         } else {
             error_log('fcm: send failed, HTTP ' . $status . ' ' . ($reason ?: 'unknown'));
         }
@@ -215,7 +232,9 @@ function fcm_send(array $tokenRows, string $title, string $body, string $url = '
         db()->prepare("DELETE FROM fcm_tokens WHERE token IN ($in)")->execute($dead);
     }
 
-    return [$sent, $failed];
+    /* Third element is additive on purpose: [$sent, $failed] = fcm_send(...)
+       still destructures correctly, so push.php needs no change. */
+    return [$sent, $failed, $reasons];
 }
 
 /** POST helper. Returns [status, body]; never throws. */

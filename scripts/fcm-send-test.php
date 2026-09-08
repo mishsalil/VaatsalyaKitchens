@@ -58,7 +58,7 @@ if (!$rows) {
 $urgent = !$quiet;
 echo 'channel: ' . ($urgent ? FCM_CHANNEL_URGENT . ' (high priority, alarm volume)' : FCM_CHANNEL_DEFAULT) . PHP_EOL;
 
-[$sent, $failed] = fcm_send(
+[$sent, $failed, $reasons] = fcm_send(
     $rows,
     $urgent ? 'Order cancelled' : 'Order update',
     $urgent
@@ -69,5 +69,30 @@ echo 'channel: ' . ($urgent ? FCM_CHANNEL_URGENT . ' (high priority, alarm volum
 );
 
 echo "sent=$sent failed=$failed" . PHP_EOL;
-echo 'Tokens FCM reported as dead were deleted; re-open the app to register again.' . PHP_EOL;
+
+/* Say WHY, and only when there is something to say. "failed=1" on its own sent
+   us hunting through a server error log to learn the token had simply expired. */
+foreach ($reasons as $r) {
+    echo sprintf(
+        "  FAILED %s  HTTP %d  %s%s\n",
+        $r['token'],
+        $r['status'],
+        $r['reason'],
+        $r['dead'] ? '  (token deleted — reopen the app to register again)' : ''
+    );
+    if ($r['reason'] === 'UNREGISTERED') {
+        echo "         The app was reinstalled or its token rotated. Open the app on that\n"
+           . "         device and allow notifications; it registers a fresh token on launch.\n";
+    } elseif ($r['reason'] === 'SENDER_ID_MISMATCH') {
+        echo "         google-services.json in the app does not match the service account\n"
+           . "         this server signs with — they must be the same Firebase project.\n";
+    } elseif ($r['reason'] === 'INVALID_ARGUMENT') {
+        echo "         FCM rejected the message itself, not the device. Check the payload\n"
+           . "         built in includes/fcm.php — every data value must be a string.\n";
+    }
+}
+
+if ($failed === 0 && $sent > 0) {
+    echo 'FCM accepted it. That is not proof the phone made a sound — check the device.' . PHP_EOL;
+}
 exit($failed > 0 ? 1 : 0);
