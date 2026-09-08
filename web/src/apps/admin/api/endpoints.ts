@@ -230,13 +230,16 @@ export const adminPushApi = {
 };
 
 export const adminMenuImageApi = {
-  /** Upload a dish photo. `file` should already be resized — see resizeForUpload. */
-  upload: (itemId: number, file: Blob) => {
+  /** Upload one photo slot (1–3). `file` should already be resized — see resizeForUpload. */
+  upload: (itemId: number, slot: number, file: Blob) => {
     const body = new FormData();
     body.append('image', file, 'dish.webp');
-    return adminApi.post(`menu/upload_image/${itemId}`, body) as Promise<{ url: string }>;
+    body.append('slot', String(slot));
+    return adminApi.post(`menu/upload_image/${itemId}`, body) as Promise<{ url: string; slot: number }>;
   },
-  remove: (itemId: number) => adminApi.post(`menu/delete_image/${itemId}`, {}),
+  /** Remove one slot, or every photo for the item when slot is omitted. */
+  remove: (itemId: number, slot?: number) =>
+    adminApi.post(`menu/delete_image/${itemId}`, slot === undefined ? {} : { slot }),
 };
 
 export const adminBroadcastApi = {

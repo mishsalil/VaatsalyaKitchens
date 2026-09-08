@@ -8,6 +8,7 @@ import { FormError } from '../../shared/components/ui/FormError';
 import { rupees } from '../../shared/lib/format';
 import type { AdminMenuCategory, AdminMenuSubcategory, AdminMenuItem } from '../types';
 import type { AdminItemPayload, AdminVariantInput, AdminAddonInput } from '../api/endpoints';
+import { DishPhotoSlots } from './DishPhotoSlots';
 
 type Props = {
   open: boolean;
@@ -221,6 +222,8 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
             </Select>
           </Field>
         </div>
+
+        <DishPhotoSlots itemId={item?.id} itemName={name || 'this item'} initial={item?.photos} />
 
         {/* Variants editor */}
         <div className="rounded-xl border border-cream-200 p-3">

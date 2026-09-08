@@ -49,6 +49,20 @@ export function apiUrl(path: string): string {
   return API_ORIGIN + join(getBasePath(), 'api', path);
 }
 
+/**
+ * A file served by the API host — dish photos, the branding logo.
+ *
+ * These need the same treatment as API calls and for the same reason, which is
+ * easy to miss because they are plain <img> sources rather than fetches: in the
+ * native app a bare "/menu/24.webp" resolves against https://localhost, which is
+ * the bundle inside the APK, so it would show whatever was packaged at build
+ * time and never a photo uploaded since.
+ */
+export function mediaUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  return API_ORIGIN + (path.startsWith('/') ? path : '/' + path);
+}
+
 /** appUrl('login') → /login */
 export function appUrl(path: string): string {
   return join(getBasePath(), path);

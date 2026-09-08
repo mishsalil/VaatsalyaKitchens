@@ -37,6 +37,8 @@ const MAP_FILE = new URL('../../scripts/dish-photo-map.json', import.meta.url).p
 // larger home-page tiles — on a 2x screen, without shipping the full 1024.
 const SIZE = 800;
 const QUALITY = 80;
+// Up to three photos per dish; matches DISH_PHOTO_SLOTS in includes/dish_photos.php.
+const SLOTS = 3;
 
 const IMAGE_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif']);
 
@@ -107,21 +109,33 @@ async function pickSource(folder, dishName) {
     });
   }
 
-  const studio = candidates.filter((c) => c.white >= STUDIO_THRESHOLD);
-  if (studio.length) {
-    // Prefer a retouched studio frame; among equals, the lowest-numbered.
-    studio.sort(
-      (a, b) => Number(b.retouched) - Number(a.retouched) || a.f.localeCompare(b.f, undefined, { numeric: true }),
-    );
-    return { file: studio[0].path, kind: studio[0].retouched ? 'studio' : 'studio (original)' };
+  const byName = (a, b) => a.f.localeCompare(b.f, undefined, { numeric: true });
+
+  /* SLOT 1 IS THE MENU TILE, so it gets the clean white-sweep frame. Every
+     folder holds exactly one of those; the rest are the same dish restyled onto
+     slate with props. Using a styled frame here would make the menu list look
+     inconsistent dish to dish, which is the one place consistency matters most. */
+  const white = candidates.filter((c) => c.white >= STUDIO_THRESHOLD).sort(byName);
+
+  /* SLOTS 2 AND 3 are the styled frames, seen only after a customer taps. They
+     are restricted to the retouched deliverables: camera originals are the
+     photographer's unedited takes and would drag the gallery down, and stock
+     imagery in a folder is not named after the dish so it never qualifies. */
+  const styled = candidates.filter((c) => c.retouched && !white.includes(c)).sort(byName);
+
+  if (white.length) {
+    return [
+      { file: white[0].path, kind: 'studio' },
+      ...styled.slice(0, SLOTS - 1).map((c) => ({ file: c.path, kind: 'styled' })),
+    ];
   }
 
-  // No white-background frame in this folder. Fall back, but say so — the
-  // result will not match the others and is worth a second look.
+  // No white frame at all. Fall back to the best available and say so — this one
+  // will not match the others on the menu and is worth a second look.
   const rest = [...candidates].sort((a, b) => Number(b.retouched) - Number(a.retouched) || b.size - a.size);
-  if (rest.length) return { file: rest[0].path, kind: 'NO STUDIO SHOT' };
+  if (rest.length) return [{ file: rest[0].path, kind: 'NO STUDIO SHOT' }];
 
-  return null;
+  return [];
 }
 
 const map = JSON.parse(readFileSync(MAP_FILE, 'utf8'));
@@ -136,26 +150,32 @@ for (const [folder, { id, name }] of Object.entries(map)) {
     problems.push(`${folder}: folder is gone`);
     continue;
   }
-  const src = await pickSource(folder, name);
-  if (!src) {
+  const sources = await pickSource(folder, name);
+  if (!sources.length) {
     problems.push(`${folder}: no usable image`);
     continue;
   }
 
-  const out = join(OUT_DIR, `${id}.webp`);
-  const info = await sharp(src.file)
-    // The retouched photos are already square; `cover` keeps that and
-    // centre-crops anything that is not, which suits plated food shot from above.
-    .resize(SIZE, SIZE, { fit: 'cover', position: 'centre' })
-    .webp({ quality: QUALITY })
-    .toFile(out);
+  const parts = [];
+  for (const [i, src] of sources.entries()) {
+    // Slot 1 keeps the bare filename, so every photo that already exists and
+    // everything that reads them keeps working. Slots 2+ are suffixed.
+    const slot = i + 1;
+    const out = join(OUT_DIR, slot === 1 ? `${id}.webp` : `${id}-${slot}.webp`);
+    const info = await sharp(src.file)
+      // The retouched photos are already square; `cover` keeps that and
+      // centre-crops anything that is not, which suits plated food from above.
+      .resize(SIZE, SIZE, { fit: 'cover', position: 'centre' })
+      .webp({ quality: QUALITY })
+      .toFile(out);
 
-  written++;
-  totalBytes += info.size;
-  console.log(
-    `  ${String(id).padEnd(4)} ${name.padEnd(30)} ${(info.size / 1024).toFixed(0).padStart(4)} KB  ` +
-      `(${src.kind}: ${basename(src.file)})`,
-  );
+    written++;
+    totalBytes += info.size;
+    parts.push(`${(info.size / 1024).toFixed(0)}KB`);
+    if (src.kind === 'NO STUDIO SHOT') parts.push('NO STUDIO SHOT');
+  }
+
+  console.log(`  ${String(id).padEnd(4)} ${name.padEnd(30)} ${sources.length} photo(s)  ${parts.join(' ')}`);
 }
 
 /* Tell the SPA which dishes have a photo.

@@ -68,12 +68,20 @@ function route($method, $action, $parts): void
         }
     }
 
+    /* Photos come from one directory read, not from the database: a dish has a
+       photo exactly when its file exists. Sending the list means the client
+       never has to discover it by attempting to load nine possible filenames
+       per dish, which across a hundred-item menu would be almost entirely
+       404s. */
+    $photos = dish_photo_map();
+
     foreach ($items as &$it) {
         $iid = (int)$it['id'];
         $it['price'] = (float)$it['price'];
         $it['subcategory_id'] = $it['subcategory_id'] !== null ? (int)$it['subcategory_id'] : null;
         $it['variants'] = $variantsByItem[$iid] ?? [];
         $it['addons'] = $addonsByItem[$iid] ?? [];
+        $it['photos'] = array_values($photos[$iid] ?? []);
     }
     unset($it);
 

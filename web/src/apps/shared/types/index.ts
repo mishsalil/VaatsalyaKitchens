@@ -101,6 +101,8 @@ export interface MenuItem {
   unit: string;
   /** Optional explicit image URL; otherwise the SPA derives /menu/{id}.webp. */
   image_url?: string;
+  /** Photo URLs in slot order, from the API's directory read. Up to three. */
+  photos?: string[];
   variants: MenuVariant[];
   addons: MenuAddon[];
 }

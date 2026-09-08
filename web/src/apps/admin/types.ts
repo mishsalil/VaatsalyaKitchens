@@ -135,6 +135,8 @@ export interface AdminMenuItem {
   sort_order: number;
   variants: AdminItemVariant[];
   addons: AdminItemAddon[];
+  /** Slot number ("1".."3") → URL, for the slots that have a photo. */
+  photos?: Record<string, string>;
 }
 
 export interface AdminAddress {

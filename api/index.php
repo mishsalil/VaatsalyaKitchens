@@ -9,6 +9,8 @@ require __DIR__ . '/../includes/helpers.php';
 require __DIR__ . '/../includes/auth.php';
 require __DIR__ . '/../includes/admin_auth.php';
 require __DIR__ . '/lib/Response.php';
+// After Response.php: the photo helpers report failures through it.
+require __DIR__ . '/../includes/dish_photos.php';
 
 // Merge a JSON request body into $_POST so route handlers can read $_POST for
 // every method (the SPA always sends JSON, not form-encoded).

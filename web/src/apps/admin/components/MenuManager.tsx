@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ChevronDown, Clock } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, ChevronDown, Clock, ImageOff } from 'lucide-react';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { useToast } from '../../shared/context/ToastContext';
 import { Skeleton } from '../../shared/components/Skeleton';
@@ -12,7 +12,7 @@ import { rupees } from '../../shared/lib/format';
 import { sampleMenuCsv } from '../../shared/lib/sampleCsv';
 import { adminMenuApi, adminHoursApi, type AdminItemPayload, type AdminHourWindow } from '../api/endpoints';
 import { HoursEditor } from './HoursEditor';
-import { DishPhotoButton } from './DishPhotoButton';
+import { mediaUrl } from '../../shared/lib/baseUrl';
 import type { AdminMenuCategory, AdminMenuSubcategory, AdminMenuItem } from '../types';
 import { ItemFormModal } from './ItemFormModal';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -326,7 +326,15 @@ export function MenuManager() {
             <ArrowDown className="h-3.5 w-3.5" />
           </button>
         </div>
-        <DishPhotoButton itemId={it.id} itemName={it.name} />
+        {/* Read-only here: photos are managed in the item editor, so the row
+            stays about the menu rather than becoming a file manager. */}
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-cream-200 bg-cream-50">
+          {it.photos && it.photos['1'] ? (
+            <img src={mediaUrl(it.photos['1'])} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <ImageOff className="h-3.5 w-3.5 text-brand-200" />
+          )}
+        </div>
         <div className="flex-1">
           <p className={`text-sm font-semibold ${it.available ? 'text-brand-900' : 'text-brand-400 line-through'}`}>
             {it.name}
