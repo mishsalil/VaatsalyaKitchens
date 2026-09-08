@@ -1,0 +1,134 @@
+{
+    "Aloo Gobhi Dry": {
+        "id": 92,
+        "name": "Aloo Gobi Dry"
+    },
+    "Aloo Gobhi Masala": {
+        "id": 93,
+        "name": "Aloo Gobi Masala"
+    },
+    "Aloo Matar Dry": {
+        "id": 90,
+        "name": "Aloo Matar Dry"
+    },
+    "Aloo Matar Masala": {
+        "id": 91,
+        "name": "Aloo Matar Masala"
+    },
+    "Chilli Potato": {
+        "id": 25,
+        "name": "Chilli Potato"
+    },
+    "Chinese Combo": {
+        "id": 131,
+        "name": "Chinese Combo Meal"
+    },
+    "Crispy Chilli Corn": {
+        "id": 23,
+        "name": "Crispy Chilli Corn"
+    },
+    "Dal Fry": {
+        "id": 86,
+        "name": "Dal Fry"
+    },
+    "Dal Handi": {
+        "id": 88,
+        "name": "Dal Handi"
+    },
+    "Dal Makhani": {
+        "id": 89,
+        "name": "Dal Makhani"
+    },
+    "Dal Tadka": {
+        "id": 87,
+        "name": "Dal Tadka"
+    },
+    "Hara Bhara Kebab": {
+        "id": 22,
+        "name": "Hara Bhara Kebab [8 Pieces]"
+    },
+    "Honey Chilli Paneer": {
+        "id": 30,
+        "name": "Honey Chilli Paneer"
+    },
+    "Honey Chilli Potato": {
+        "id": 26,
+        "name": "Honey Chilli Potato"
+    },
+    "Hot Garlic Paneer": {
+        "id": 29,
+        "name": "Hot Garlic Paneer"
+    },
+    "Jeera Rice": {
+        "id": 123,
+        "name": "Jeera Rice"
+    },
+    "Kadhai Paneer": {
+        "id": 104,
+        "name": "Kadhai Paneer"
+    },
+    "Malai Kofta": {
+        "id": 97,
+        "name": "Malai Kofta"
+    },
+    "Matar Paneer": {
+        "id": 103,
+        "name": "Matar Paneer"
+    },
+    "Matar Pulao": {
+        "id": 125,
+        "name": "Matar Pulao"
+    },
+    "Mix Veg Dry": {
+        "id": 95,
+        "name": "Mix Veg Dry"
+    },
+    "Paneer Butter Masala": {
+        "id": 102,
+        "name": "Paneer Butter Masala"
+    },
+    "Paneer Chilli Dry": {
+        "id": 28,
+        "name": "Chilli Paneer Dry"
+    },
+    "Paneer Chilli Gravy": {
+        "id": 107,
+        "name": "Chilli Paneer Gravy"
+    },
+    "Paneer Manchurian Gravy": {
+        "id": 106,
+        "name": "Paneer Manchurian Gravy"
+    },
+    "Paneer Tikka Masala": {
+        "id": 101,
+        "name": "Paneer Tikka Masala"
+    },
+    "Spring Rolls": {
+        "id": 24,
+        "name": "Veg Spring Roll"
+    },
+    "Steamed Rice": {
+        "id": 122,
+        "name": "Steamed Rice"
+    },
+    "Tawa Paratha": {
+        "id": 116,
+        "name": "Tawa Paratha"
+    },
+    "Tawa Roti": {
+        "id": 115,
+        "name": "Tawa Roti"
+    },
+    "Veg Kadhai": {
+        "id": 94,
+        "name": "Veg Kadhai"
+    },
+    "Veg Manchurian Dry": {
+        "id": 27,
+        "name": "Veg Manchurian Dry"
+    },
+    "Veg Manchurian Gravy": {
+        "id": 105,
+        "name": "Veg Manchurian Gravy"
+    }
+}

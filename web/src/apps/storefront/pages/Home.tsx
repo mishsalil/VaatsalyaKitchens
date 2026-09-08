@@ -12,6 +12,7 @@ import { DishImage } from '../../shared/components/ui/DishImage';
 import { useCart } from '../../shared/context/CartContext';
 import { PushNudge } from '../../shared/push/PushNudge';
 import { describeWeek } from '../../shared/lib/hours';
+import { DISH_PHOTO_IDS } from '../../shared/lib/dishPhotos';
 
 const SERVICES = [
   { icon: PartyPopper, title: 'Small Parties', body: 'Birthdays, anniversaries and family functions for 10–50 guests. Curated veg menus, served hot, right on time.' },
@@ -32,8 +33,18 @@ export function Home() {
   const menu = useFetch(() => menuApi.get(), []);
   const items = menu.data?.items ?? [];
   const cats = menu.data?.categories ?? [];
-  // One-tap Add cards: only items with no variants/add-ons (those need the picker).
-  const popular = items.filter((it) => it.variants.length === 0 && it.addons.length === 0).slice(0, 8);
+  /* One-tap Add cards: only items with no variants/add-ons (those need the picker).
+     Photographed dishes come first, because this page and the hero above it lead
+     with pictures — taking the first eight in menu order would fill them with
+     items that have no photo and show empty fallback tiles while real
+     photography sat unused. Within each group menu order is preserved, so the
+     kitchen's own ordering still decides what leads. */
+  const popular = useMemo(() => {
+    const simple = items.filter((it) => it.variants.length === 0 && it.addons.length === 0);
+    const withPhoto = simple.filter((it) => DISH_PHOTO_IDS.has(it.id));
+    const rest = simple.filter((it) => !DISH_PHOTO_IDS.has(it.id));
+    return [...withPhoto, ...rest].slice(0, 8);
+  }, [items]);
 
   /* Opening hours for the contact card. Consecutive days with identical hours
      collapse into one line, so a kitchen open the same time all week reads
