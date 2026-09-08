@@ -358,10 +358,13 @@ CREATE TABLE IF NOT EXISTS settings (
               ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- The GSTIN is printed on every order receipt and the address is published on
+-- the Contact Us page, so both are seeded rather than left blank for someone to
+-- remember. Both stay editable in admin Settings.
 INSERT IGNORE INTO settings (`key`, `value`) VALUES
   ('kitchen_name',    'Vaatsalya Kitchens'),
-  ('kitchen_address', ''),
-  ('gstin',           ''),
+  ('kitchen_address', '#001, Mishra Niwas, Sitapur SPN Highway, Badaura, Sitapur - 261001'),
+  ('gstin',           '09AVYPM7231Q1ZE'),
   ('print_footer',    'Thank you for ordering with Vaatsalya Kitchens!'),
   ('logo_path',       NULL);
 

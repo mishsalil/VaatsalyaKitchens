@@ -57,29 +57,29 @@ export const business = {
 
   /* ---- Grievance officer ---------------------------------------------- */
   /* Required by the IT (Intermediary Guidelines) Rules 2021 and by the
-     Consumer Protection (E-Commerce) Rules 2020. The channels are the business
-     ones; the rules want a NAMED person, which is still to be supplied. */
-  grievanceOfficerName: PENDING,
+     Consumer Protection (E-Commerce) Rules 2020, which want a named person
+     reachable on a published channel. */
+  grievanceOfficerName: 'Salil Mishra',
   grievanceOfficerEmail: 'vaatsalyakitchens@gmail.com',
   grievanceOfficerPhone: '+91-9623836382',
 
   /* ---- Ordering and delivery terms ------------------------------------ */
   /** Where you deliver, in plain words. e.g. "Sitapur city, within 10 km of ...". */
-  deliveryAreas: PENDING,
+  deliveryAreas: 'all areas across Sitapur',
   /** How much notice a bulk or party order needs. e.g. "24 hours". */
-  noticePeriod: PENDING,
+  noticePeriod: '3 days',
   /** How late an order may be cancelled without a charge. e.g. "12 hours". */
-  cancellationCutOff: PENDING,
+  cancellationCutOff: '24 hours',
   /** Delivery charge, or how it is calculated. */
-  deliveryCharge: PENDING,
+  deliveryCharge: 'none up to 4 km; beyond that, charged on actuals',
   /** Minimum order value, if any. Use "None" when there is none. */
-  minimumOrder: PENDING,
+  minimumOrder: '₹199 for regular orders, ₹2,000 for bulk orders',
   /** How long a refund takes to reach the customer. e.g. "5-7 working days". */
-  refundTimeline: PENDING,
+  refundTimeline: '15 days',
 
   /* ---- Housekeeping ---------------------------------------------------- */
   /** Date these policies took effect. Set this to the day you publish them. */
-  effectiveDate: PENDING,
+  effectiveDate: '8 September 2026',
 } as const;
 
 export type BusinessDetails = typeof business;
