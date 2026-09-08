@@ -34,6 +34,7 @@ function route($method, $action, $parts): void
             'kitchen_email'         => $s['kitchen_email'],
             'logo_path'             => $s['logo_path'],
             'gst_rate'              => (string)($s['gst_rate'] ?? '0'),
+            'min_order_value'       => (string)($s['min_order_value'] ?? '0'),
             'base_url'              => $cfg['base_url'],
             // Web Push config — the SPA subscribes on site open (not only after
             // an order), so the public key must be reachable before login.

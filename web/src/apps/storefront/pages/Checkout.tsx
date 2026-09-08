@@ -82,6 +82,13 @@ export function Checkout() {
   const gst = computeGst(total, settings?.gst_rate);
   const grandTotal = gst.total;
 
+  /* Minimum order. Checked against the pre-tax subtotal, which is what the
+     server checks, so the two can never disagree about whether a cart
+     qualifies. Telling the customer here — and how much more is needed —
+     beats letting them fill in the whole form and be refused at the end. */
+  const minOrder = Number(settings?.min_order_value ?? 0);
+  const belowMinimum = minOrder > 0 && total < minOrder;
+
   const placeOrder = async (e: FormEvent) => {
     e.preventDefault();
     setFormError('');
@@ -201,8 +208,14 @@ export function Checkout() {
         <aside className="sm:sticky sm:top-20">
           <div className="space-y-4">
             <BillDetails items={billItems} total={grandTotal} gst={gst} />
+            {belowMinimum && (
+              <p className="rounded-xl border border-gold-300 bg-gold-50 px-4 py-3 text-sm text-brand-700">
+                Our minimum order is <strong>{rupees(minOrder)}</strong>. Please add{' '}
+                <strong>{rupees(minOrder - total)}</strong> more to your cart.
+              </p>
+            )}
             <form onSubmit={placeOrder}>
-              <Button type="submit" size="lg" fullWidth disabled={submitting}>
+              <Button type="submit" size="lg" fullWidth disabled={submitting || belowMinimum}>
                 {submitting ? 'Placing order…' : `Place order · ${rupees(grandTotal)}`}
               </Button>
             </form>

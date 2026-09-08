@@ -29,6 +29,8 @@ export interface Settings {
   logo_path?: string | null;
   /** Tax-exclusive GST rate (percent), split equally SGST/CGST. "0" disables GST. */
   gst_rate?: string;
+  /** Smallest pre-tax subtotal we accept, in rupees. "0" means no minimum. */
+  min_order_value?: string;
   base_url: string;
   vapid_public_key: string;
   push_configured: boolean;

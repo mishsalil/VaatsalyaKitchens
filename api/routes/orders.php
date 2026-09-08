@@ -170,6 +170,17 @@ function route($method, $action, $parts): void
             Response::error('Please choose at least one dish.');
         }
 
+        /* Minimum order, checked on the pre-tax subtotal. The cart disables the
+           button below this, but that is only UX — this is the authority, so a
+           direct POST cannot slip a smaller order through. Compared against the
+           value published on the Shipping & Delivery page. */
+        $minOrder = (float)setting('min_order_value', '0');
+        if ($minOrder > 0 && $total < $minOrder) {
+            Response::error(
+                'Our minimum order is ' . rupees($minOrder) . '. Please add a little more to your cart.'
+            );
+        }
+
         // Tax-exclusive GST snapshot — the breakdown is frozen on the order so
         // editing the rate later never changes a past bill. Menu prices are
         // pre-tax; the customer pays the grand total (total_estimate).

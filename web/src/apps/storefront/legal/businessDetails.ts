@@ -28,13 +28,8 @@ export const business = {
   /* ---- Identity ------------------------------------------------------- */
   /** Registered legal name, if it differs from the trading name. */
   legalName: 'Vaatsalya Kitchens',
-  /**
-   * e.g. "Sole Proprietorship", "Private Limited Company", "Partnership".
-   * NOT YET CONFIRMED. The PAN inside the GSTIN (AVYPM7231Q) has "P" in the
-   * fourth position, which denotes an individual — so this is very likely a
-   * sole proprietorship. Confirm before relying on it; it is a legal statement.
-   */
-  entityType: PENDING,
+  /** e.g. "Sole Proprietorship", "Private Limited Company", "Partnership". */
+  entityType: 'Sole Proprietorship',
   /** Full registered address, including PIN code. */
   registeredAddress: '#001, Mishra Niwas, Sitapur SPN Highway, Badaura, Sitapur - 261001',
   /** Place whose courts have jurisdiction — a city, not the full address. */

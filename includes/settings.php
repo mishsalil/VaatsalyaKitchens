@@ -28,6 +28,12 @@ function settings_defaults(): array
         'print_footer'         => 'Thank you for ordering with Vaatsalya Kitchens!',
         // Tax-exclusive GST rate (percent), split equally SGST/CGST.
         'gst_rate'             => '5',
+        /* Smallest order we accept, in rupees, checked against the pre-tax
+           subtotal. Stated in the Shipping & Delivery and Terms pages, so
+           changing it here changes what those pages promise. "0" disables it.
+           Bulk and party minimums are not enforced here — those are agreed on
+           the phone, not placed through the cart. */
+        'min_order_value'      => '199',
     ];
 }
 
