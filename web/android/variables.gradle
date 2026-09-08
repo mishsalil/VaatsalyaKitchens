@@ -13,4 +13,10 @@ ext {
     androidxJunitVersion = '1.3.0'
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
+    /* The push plugin declares firebase-messaging as 'implementation', so its
+       classes are hidden from this module. VkMessagingService subclasses the
+       plugin's service, so the app needs it on its own compile classpath.
+       Set here rather than in app/build.gradle because the plugin reads this
+       same property — one version, no drift. */
+    firebaseMessagingVersion = '25.0.1'
 }

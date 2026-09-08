@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="true"
@@ -24,6 +25,30 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Our messaging service extends Capacitor's and calls super, so the
+             plugin still gets every message. Firebase delivers to exactly one
+             service, so the plugin's own registration is removed here and ours
+             takes the intent filter; leaving both would be a coin toss over
+             which one Android picks. -->
+        <service
+            android:name="com.capacitorjs.plugins.pushnotifications.MessagingService"
+            tools:node="remove" />
+        <service
+            android:name=".VkMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Rings for an urgent order. shortService needs no extra permission
+             and Android stops it after a few minutes on its own, which suits an
+             alert that already gives up after a minute. -->
+        <service
+            android:name=".OrderAlarmService"
+            android:exported="false"
+            android:foregroundServiceType="shortService" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -59,4 +84,14 @@
          system settings, which is a one-time setup step on a counter device.
          Declared here so that settings screen lists this app at all. -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
+    <!-- The urgent-order alarm. FOREGROUND_SERVICE lets it keep ringing while
+         the app is in the background; WAKE_LOCK lights the screen so the alert
+         is seen as well as heard. USE_FULL_SCREEN_INTENT is requested so the
+         alert can take over the screen — on Android 14+ an app outside the
+         alarm/calling categories may not be granted it, in which case the
+         notification degrades to a heads-up banner and the tone still rings. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SHORT_SERVICE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 </manifest>

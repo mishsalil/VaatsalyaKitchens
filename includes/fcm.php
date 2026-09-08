@@ -147,23 +147,46 @@ function fcm_send(array $tokenRows, string $title, string $body, string $url = '
             continue;
         }
 
-        $message = [
-            'message' => [
-                'token'        => $token,
-                'notification' => ['title' => $title, 'body' => $body],
-                'android'      => [
-                    // "high" is what lets the message wake a dozing device;
-                    // normal priority is batched and may arrive much later.
-                    'priority'     => $urgent ? 'high' : 'normal',
-                    'notification' => [
-                        'channel_id' => $urgent ? FCM_CHANNEL_URGENT : FCM_CHANNEL_DEFAULT,
+        if ($urgent) {
+            /* DATA-ONLY, DELIBERATELY. Firebase displays a `notification`
+               message itself while the app is backgrounded, and when it does,
+               the app's onMessageReceived never runs — so the app cannot play
+               anything, and the notification alone is silent on a phone set to
+               vibrate (measured on a Galaxy S24: the system swaps the sound for
+               a buzz). Sending data only hands the message to VkMessagingService
+               every time, which rings the alarm itself and posts the alert.
+
+               Only staff devices ever get this: push_send_to_admins is the sole
+               caller with $urgent = true. */
+            $message = [
+                'message' => [
+                    'token'   => $token,
+                    'android' => ['priority' => 'high'],
+                    'data'    => [
+                        'vk_urgent' => '1',
+                        'title'     => $title,
+                        'body'      => $body,
+                        'url'       => $url !== '' ? $url : '/',
                     ],
                 ],
-                // Same shape the service worker already reads, so the server
-                // describes a notification once for both transports.
-                'data' => ['url' => $url !== '' ? $url : '/'],
-            ],
-        ];
+            ];
+        } else {
+            $message = [
+                'message' => [
+                    'token'        => $token,
+                    'notification' => ['title' => $title, 'body' => $body],
+                    'android'      => [
+                        // "high" is what lets the message wake a dozing device;
+                        // normal priority is batched and may arrive much later.
+                        'priority'     => 'normal',
+                        'notification' => ['channel_id' => FCM_CHANNEL_DEFAULT],
+                    ],
+                    // Same shape the service worker already reads, so the server
+                    // describes a notification once for both transports.
+                    'data' => ['url' => $url !== '' ? $url : '/'],
+                ],
+            ];
+        }
 
         [$status, $response] = fcm_http_post($endpoint, json_encode($message), $headers);
 
