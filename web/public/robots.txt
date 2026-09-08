@@ -11,4 +11,4 @@ Disallow: /order-success
 Disallow: /claim
 Disallow: /api/
 
-Sitemap: https://REPLACE-WITH-YOUR-DOMAIN/sitemap.xml
+Sitemap: https://vaatsalyakitchens.in/sitemap.xml
