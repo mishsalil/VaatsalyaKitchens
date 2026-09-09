@@ -94,4 +94,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SHORT_SERVICE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Printing to the counter's Bluetooth printer. Only BONDED devices are
+         used — the printer is paired once in Android settings — so BLUETOOTH_SCAN
+         is deliberately not requested: scanning is the permission that asks for
+         nearby-devices access, and we never scan.
+         BLUETOOTH_CONNECT is runtime from Android 12; the two legacy permissions
+         cover older phones and are capped so they are not requested twice. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
 </manifest>

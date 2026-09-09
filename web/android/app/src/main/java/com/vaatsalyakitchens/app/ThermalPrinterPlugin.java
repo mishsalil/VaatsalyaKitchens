@@ -1,0 +1,200 @@
+package com.vaatsalyakitchens.app;
+
+import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothSocket;
+import android.os.Build;
+import android.util.Base64;
+import android.util.Log;
+
+import com.getcapacitor.JSArray;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
+
+import java.io.OutputStream;
+import java.util.UUID;
+
+/**
+ * Prints to the counter's Bluetooth thermal printer.
+ *
+ * BLUETOOTH CLASSIC, NOT BLE, AND NOT BY PREFERENCE. The PT-210 reports itself
+ * as a DUAL device but advertises exactly one service — the Serial Port Profile
+ * UUID below. It exposes no GATT printing service, so RFCOMM is the only way in.
+ *
+ * The socket is opened per print and closed after. Holding one open is what goes
+ * stale when the printer sleeps, and a receipt is small enough that reconnecting
+ * costs nothing anyone can perceive.
+ */
+@CapacitorPlugin(
+    name = "ThermalPrinter",
+    permissions = {
+        // Alias spelled literally: an annotation cannot reference a constant on
+        // the class it annotates.
+        @Permission(alias = "bluetooth", strings = { Manifest.permission.BLUETOOTH_CONNECT })
+    }
+)
+public class ThermalPrinterPlugin extends Plugin {
+
+    private static final String BLUETOOTH = "bluetooth";
+    private static final String TAG = "ThermalPrinter";
+
+    /** Serial Port Profile. Every ESC/POS printer speaking Classic uses it. */
+    private static final UUID SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
+    /** Android 11 and below granted Bluetooth at install time. */
+    private boolean needsRuntimePermission() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
+    }
+
+    private boolean hasPermission() {
+        return !needsRuntimePermission() || getPermissionState(BLUETOOTH) == PermissionState.GRANTED;
+    }
+
+    @PluginMethod
+    public void ensurePermission(PluginCall call) {
+        if (hasPermission()) {
+            JSObject res = new JSObject();
+            res.put("granted", true);
+            call.resolve(res);
+            return;
+        }
+        requestPermissionForAlias(BLUETOOTH, call, "permissionResult");
+    }
+
+    @PermissionCallback
+    private void permissionResult(PluginCall call) {
+        JSObject res = new JSObject();
+        res.put("granted", hasPermission());
+        call.resolve(res);
+    }
+
+    /**
+     * Bonded devices that offer SPP.
+     *
+     * Filtered on the service rather than shown wholesale: a counter phone is
+     * paired with headsets, a car and a TV, and a picker listing all of them
+     * invites someone to choose the wrong one at the worst moment.
+     */
+    @PluginMethod
+    public void listPaired(PluginCall call) {
+        if (!hasPermission()) {
+            call.reject("Allow Bluetooth access to print.");
+            return;
+        }
+        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+        if (adapter == null) {
+            call.reject("This device has no Bluetooth.");
+            return;
+        }
+        if (!adapter.isEnabled()) {
+            call.reject("Bluetooth is switched off.");
+            return;
+        }
+
+        JSArray devices = new JSArray();
+        try {
+            for (BluetoothDevice device : adapter.getBondedDevices()) {
+                if (!offersSpp(device)) {
+                    continue;
+                }
+                JSObject entry = new JSObject();
+                entry.put("name", device.getName() != null ? device.getName() : device.getAddress());
+                entry.put("address", device.getAddress());
+                devices.put(entry);
+            }
+        } catch (SecurityException e) {
+            call.reject("Allow Bluetooth access to print.");
+            return;
+        }
+
+        JSObject res = new JSObject();
+        res.put("devices", devices);
+        call.resolve(res);
+    }
+
+    private boolean offersSpp(BluetoothDevice device) {
+        try {
+            android.os.ParcelUuid[] uuids = device.getUuids();
+            if (uuids == null) {
+                // Some devices report no cached UUIDs; let them through rather
+                // than hide a printer that would have worked.
+                return true;
+            }
+            for (android.os.ParcelUuid uuid : uuids) {
+                if (SPP.equals(uuid.getUuid())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (SecurityException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Connect, write, close — on a background thread, because socket I/O on the
+     * main thread freezes the counter's screen while the printer is reached.
+     */
+    @PluginMethod
+    public void print(PluginCall call) {
+        String address = call.getString("address");
+        String dataBase64 = call.getString("dataBase64");
+        if (address == null || address.isEmpty() || dataBase64 == null) {
+            call.reject("No printer chosen.");
+            return;
+        }
+        if (!hasPermission()) {
+            call.reject("Allow Bluetooth access to print.");
+            return;
+        }
+
+        new Thread(() -> {
+            BluetoothSocket socket = null;
+            try {
+                BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                if (adapter == null || !adapter.isEnabled()) {
+                    call.reject("Bluetooth is switched off.");
+                    return;
+                }
+                BluetoothDevice device = adapter.getRemoteDevice(address);
+                socket = device.createRfcommSocketToServiceRecord(SPP);
+
+                // Discovery while connecting is slow and unreliable; we are not
+                // scanning, but another part of the system might be.
+                adapter.cancelDiscovery();
+
+                socket.connect();
+                byte[] payload = Base64.decode(dataBase64, Base64.DEFAULT);
+                OutputStream out = socket.getOutputStream();
+                out.write(payload);
+                out.flush();
+
+                JSObject res = new JSObject();
+                res.put("ok", true);
+                call.resolve(res);
+            } catch (SecurityException e) {
+                call.reject("Allow Bluetooth access to print.");
+            } catch (IllegalArgumentException e) {
+                call.reject("That printer address is not valid. Choose the printer again.");
+            } catch (Exception e) {
+                Log.w(TAG, "print failed", e);
+                call.reject("Could not reach the printer. Check it is on and in range.");
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.close();
+                    } catch (Exception ignored) {
+                        /* already gone */
+                    }
+                }
+            }
+        }).start();
+    }
+}
