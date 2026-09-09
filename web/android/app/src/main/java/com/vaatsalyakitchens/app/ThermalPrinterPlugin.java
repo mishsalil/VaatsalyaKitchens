@@ -166,9 +166,14 @@ public class ThermalPrinterPlugin extends Plugin {
                 BluetoothDevice device = adapter.getRemoteDevice(address);
                 socket = device.createRfcommSocketToServiceRecord(SPP);
 
-                // Discovery while connecting is slow and unreliable; we are not
-                // scanning, but another part of the system might be.
-                adapter.cancelDiscovery();
+                // Prophylactic only: a running discovery slows an RFCOMM connect on older
+                // phones. From API 31 this call needs BLUETOOTH_SCAN, which this app
+                // deliberately never requests — so its failure must not fail the print.
+                try {
+                    adapter.cancelDiscovery();
+                } catch (Exception ignored) {
+                    /* discovery was not ours to cancel; connecting anyway */
+                }
 
                 socket.connect();
                 byte[] payload = Base64.decode(dataBase64, Base64.DEFAULT);
