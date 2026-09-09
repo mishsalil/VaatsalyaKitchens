@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Search, Minus, X, Check, Printer, UserCheck, Gift, MessageCircle, Clock } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -98,7 +98,11 @@ export function AdminNewOrder() {
 
   /* The order is already saved before this runs. Printing can fail and the sale
      still stands — which is why the failure shows a Reprint rather than
-     anything resembling an error about the order. */
+     anything resembling an error about the order.
+     Each document is attempted individually and reported by name — so if the
+     bill prints and the kitchen ticket then fails, the operator knows exactly
+     which one to worry about, and Reprint (which reprints both) is never the
+     only option when only one of the two actually failed to come out. */
   const printSaved = async () => {
     if (!placed || !printer || paper === 'a4' || !printerSupported()) return;
     setPrinting(true);
@@ -115,7 +119,12 @@ export function AdminNewOrder() {
         footer: header?.print_footer,
       };
       for (const doc of documentsFor('both', full, business, paper)) {
-        await printBlocks(printer.address, doc.blocks);
+        try {
+          await printBlocks(printer.address, doc.blocks);
+        } catch (e) {
+          setPrintNote(`${doc.label}: ${(e as Error).message}`);
+          return;
+        }
       }
     } catch (e) {
       setPrintNote((e as Error).message);
@@ -124,8 +133,16 @@ export function AdminNewOrder() {
     }
   };
 
+  // StrictMode double-invokes effects with no cleanup in development, which
+  // would fire printSaved() twice for the same order and waste paper. This
+  // ref remembers the last order id we already printed for, so the second
+  // invocation is a no-op — do not remove it as redundant.
+  const lastAutoPrintedId = useRef<number | null>(null);
   useEffect(() => {
-    if (placed && autoPrint) void printSaved();
+    if (placed && autoPrint && lastAutoPrintedId.current !== placed.id) {
+      lastAutoPrintedId.current = placed.id;
+      void printSaved();
+    }
     // Deliberately keyed on the order id alone: re-running on every render
     // would print the same order repeatedly.
   }, [placed?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -335,6 +352,9 @@ export function AdminNewOrder() {
     setKnown(null); setCart({}); setQuery('');
     setDiscountPct(''); setDeliveryCharge(''); setComplimentary(false);
     setError(null); setPlaced(null); setClaimNote(null);
+    // Otherwise a failed print from the order just finished would render under
+    // the next order's confirmation screen, misattributed to it.
+    setPrintNote(null); setPrinting(false);
   };
 
   /**
