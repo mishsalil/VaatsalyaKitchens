@@ -48,6 +48,11 @@ public class ThermalPrinterPlugin extends Plugin {
     /** Serial Port Profile. Every ESC/POS printer speaking Classic uses it. */
     private static final UUID SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
+    /** Time to let the Bluetooth stack drain after a write, before the socket
+        is closed. Generous on purpose: a receipt takes well under a second to
+        transmit, and a truncated bill costs far more than half a second does. */
+    private static final long PRINT_SETTLE_MS = 500L;
+
     /** Android 11 and below granted Bluetooth at install time. */
     private boolean needsRuntimePermission() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
@@ -181,6 +186,13 @@ public class ThermalPrinterPlugin extends Plugin {
                 out.write(payload);
                 out.flush();
 
+                /* BluetoothOutputStream.flush() is a no-op in AOSP, and closing
+                   an RFCOMM socket straight after a write can discard bytes the
+                   stack has not yet pushed to the printer — producing a half
+                   printed bill that we would report as success. Wait for the
+                   radio to drain before the finally block closes the socket. */
+                Thread.sleep(PRINT_SETTLE_MS);
+
                 JSObject res = new JSObject();
                 res.put("ok", true);
                 call.resolve(res);
@@ -188,6 +200,9 @@ public class ThermalPrinterPlugin extends Plugin {
                 call.reject("Allow Bluetooth access to print.");
             } catch (IllegalArgumentException e) {
                 call.reject("That printer address is not valid. Choose the printer again.");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                call.reject("Could not reach the printer. Check it is on and in range.");
             } catch (Exception e) {
                 Log.w(TAG, "print failed", e);
                 call.reject("Could not reach the printer. Check it is on and in range.");

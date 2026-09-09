@@ -24,6 +24,11 @@ interface ThermalPrinterPlugin {
 
 const Native = registerPlugin<ThermalPrinterPlugin>('ThermalPrinter');
 
+/** Pause between two documents sent to the same printer. Many SPP printers
+ *  refuse a reconnect for a few hundred milliseconds after a disconnect, and
+ *  the second document is the one that would silently fail. */
+export const PRINTER_SETTLE_MS = 800;
+
 /** Bluetooth printing exists only inside the Android app. */
 export function printerSupported(): boolean {
   return isNativePlatform();

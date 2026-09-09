@@ -13,7 +13,7 @@ import { Button } from '../../shared/components/ui/Button';
 import { CustomerSuggest } from '../components/CustomerSuggest';
 import { usePaperSetting } from '../hooks/usePaperSetting';
 import { usePrinterSetting } from '../hooks/usePrinterSetting';
-import { printBlocks, printerSupported } from '../../shared/print/thermalPrinter';
+import { printBlocks, printerSupported, PRINTER_SETTLE_MS } from '../../shared/print/thermalPrinter';
 import { documentsFor } from '../components/PrinterBar';
 
 /**
@@ -95,6 +95,7 @@ export function AdminNewOrder() {
   const { printer, autoPrint } = usePrinterSetting();
   const [printNote, setPrintNote] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
+  const [printSuccess, setPrintSuccess] = useState(false);
 
   /* The order is already saved before this runs. Printing can fail and the sale
      still stands — which is why the failure shows a Reprint rather than
@@ -107,6 +108,7 @@ export function AdminNewOrder() {
     if (!placed || !printer || paper === 'a4' || !printerSupported()) return;
     setPrinting(true);
     setPrintNote(null);
+    setPrintSuccess(false);
     try {
       const full = (await adminOrdersApi.show(placed.id)).order;
       const header = settings?.print_header;
@@ -118,14 +120,23 @@ export function AdminNewOrder() {
         gstin: header?.gstin,
         footer: header?.print_footer,
       };
-      for (const doc of documentsFor('both', full, business, paper)) {
+      const docsToPrint = documentsFor('both', full, business, paper);
+      for (let i = 0; i < docsToPrint.length; i++) {
+        const doc = docsToPrint[i];
         try {
           await printBlocks(printer.address, doc.blocks);
         } catch (e) {
           setPrintNote(`${doc.label}: ${(e as Error).message}`);
           return;
         }
+        // Many SPP printers refuse a reconnect for a few hundred milliseconds
+        // after a disconnect — pause between documents so the second one is
+        // not the one that silently fails.
+        if (i < docsToPrint.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, PRINTER_SETTLE_MS));
+        }
       }
+      setPrintSuccess(true);
     } catch (e) {
       setPrintNote((e as Error).message);
     } finally {
@@ -354,7 +365,7 @@ export function AdminNewOrder() {
     setError(null); setPlaced(null); setClaimNote(null);
     // Otherwise a failed print from the order just finished would render under
     // the next order's confirmation screen, misattributed to it.
-    setPrintNote(null); setPrinting(false);
+    setPrintNote(null); setPrinting(false); setPrintSuccess(false);
   };
 
   /**
@@ -476,7 +487,7 @@ export function AdminNewOrder() {
           <Link to={`/admin/orders/${placed.id}/print`}>
             <Button variant="outline"><Printer className="h-4 w-4" /> Print slip</Button>
           </Link>
-          {printerSupported() && printer && (
+          {printerSupported() && printer && paper !== 'a4' && (
             <Button variant="outline" onClick={printSaved} disabled={printing}>
               <Printer className="h-4 w-4" /> {printing ? 'Printing…' : 'Reprint'}
             </Button>
@@ -489,6 +500,9 @@ export function AdminNewOrder() {
             : <Button onClick={reset}>New order</Button>}
         </div>
         {claimNote && <p className="mt-3 text-sm text-brand-500">{claimNote}</p>}
+        {printSuccess && !printNote && (
+          <p className="mt-3 text-xs text-brand-400">Receipt printed.</p>
+        )}
         {printNote && (
           <p className="mt-3 text-sm font-medium text-red-700">
             {printNote} — the order is saved; tap Reprint once the printer is ready.

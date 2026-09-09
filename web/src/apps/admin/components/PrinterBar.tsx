@@ -5,6 +5,7 @@ import {
   listPairedPrinters,
   ensurePrinterPermission,
   printBlocks,
+  PRINTER_SETTLE_MS,
   type PairedPrinter,
 } from '../../shared/print/thermalPrinter';
 import { receiptText, type PaperWidth, type ReceiptBusiness, type ReceiptOrder } from '../../shared/lib/receiptText';
@@ -61,13 +62,21 @@ export function PrinterBar({ order, business, width }: {
     setBusy(true);
     setNote(null);
     setOk(false);
-    for (const doc of documentsFor(docs, order, business, width)) {
+    const docsToPrint = documentsFor(docs, order, business, width);
+    for (let i = 0; i < docsToPrint.length; i++) {
+      const doc = docsToPrint[i];
       try {
         await printBlocks(printer.address, doc.blocks);
       } catch (e) {
         setNote(`${doc.label}: ${(e as Error).message}`);
         setBusy(false);
         return;
+      }
+      // Many SPP printers refuse a reconnect for a few hundred milliseconds
+      // after a disconnect — pause between documents so the second one is
+      // not the one that silently fails.
+      if (i < docsToPrint.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, PRINTER_SETTLE_MS));
       }
     }
     setOk(true);
@@ -86,6 +95,12 @@ export function PrinterBar({ order, business, width }: {
           className="min-w-0 flex-1 rounded-lg border border-cream-300 px-2 py-1.5 text-sm"
         >
           <option value="">Choose a printer…</option>
+          {/* The saved printer may be absent from `devices` (Bluetooth off,
+              permission denied, refresh failed). Render it anyway so the
+              select shows what is configured instead of going blank. */}
+          {printer && !devices.some((d) => d.address === printer.address) && (
+            <option value={printer.address}>{printer.name} (not found)</option>
+          )}
           {devices.map((d) => (
             <option key={d.address} value={d.address}>{d.name}</option>
           ))}

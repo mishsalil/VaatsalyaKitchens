@@ -38,8 +38,8 @@ console.log('escpos.encode');
 const simple = esc.encode([{ text: 'Hi' }]);
 check('starts with ESC @ (initialise)', simple[0] === 0x1b && simple[1] === 0x40);
 check('maps ASCII byte for byte', simple[2] === 0x48 && simple[3] === 0x69);
-check('ends with four line feeds',
-  Array.from(simple.slice(-4)).every((b) => b === 0x0a));
+check('ends with the block\'s own feed plus four trailing line feeds',
+  Array.from(simple.slice(-5)).every((b) => b === 0x0a));
 
 const devanagari = esc.encode([{ text: 'वात्सल्य Kitchens' }]);
 check('no byte above 0x7e survives',
