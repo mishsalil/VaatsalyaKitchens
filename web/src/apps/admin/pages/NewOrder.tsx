@@ -11,6 +11,10 @@ import { cartKey, type MenuItem } from '../../shared/types';
 import { kitchenOpenAt, categoryOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
 import { Button } from '../../shared/components/ui/Button';
 import { CustomerSuggest } from '../components/CustomerSuggest';
+import { usePaperSetting } from '../hooks/usePaperSetting';
+import { usePrinterSetting } from '../hooks/usePrinterSetting';
+import { printBlocks, printerSupported } from '../../shared/print/thermalPrinter';
+import { documentsFor } from '../components/PrinterBar';
 
 /**
  * Counter order entry — the 100-200x/day lane.
@@ -86,6 +90,45 @@ export function AdminNewOrder() {
   const [placed, setPlaced] = useState<{ id: number; total: number; complimentary: boolean } | null>(null);
   const [claimBusy, setClaimBusy] = useState(false);
   const [claimNote, setClaimNote] = useState<string | null>(null);
+
+  const [paper] = usePaperSetting();
+  const { printer, autoPrint } = usePrinterSetting();
+  const [printNote, setPrintNote] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+
+  /* The order is already saved before this runs. Printing can fail and the sale
+     still stands — which is why the failure shows a Reprint rather than
+     anything resembling an error about the order. */
+  const printSaved = async () => {
+    if (!placed || !printer || paper === 'a4' || !printerSupported()) return;
+    setPrinting(true);
+    setPrintNote(null);
+    try {
+      const full = (await adminOrdersApi.show(placed.id)).order;
+      const header = settings?.print_header;
+      const business = {
+        name: header?.kitchen_name || 'Vaatsalya Kitchens',
+        address: header?.kitchen_address,
+        phone: header?.kitchen_phone_display,
+        email: header?.kitchen_email,
+        gstin: header?.gstin,
+        footer: header?.print_footer,
+      };
+      for (const doc of documentsFor('both', full, business, paper)) {
+        await printBlocks(printer.address, doc.blocks);
+      }
+    } catch (e) {
+      setPrintNote((e as Error).message);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (placed && autoPrint) void printSaved();
+    // Deliberately keyed on the order id alone: re-running on every render
+    // would print the same order repeatedly.
+  }, [placed?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const itemById = useMemo(() => {
     const m = new Map<number, MenuItem>();
@@ -413,6 +456,11 @@ export function AdminNewOrder() {
           <Link to={`/admin/orders/${placed.id}/print`}>
             <Button variant="outline"><Printer className="h-4 w-4" /> Print slip</Button>
           </Link>
+          {printerSupported() && printer && (
+            <Button variant="outline" onClick={printSaved} disabled={printing}>
+              <Printer className="h-4 w-4" /> {printing ? 'Printing…' : 'Reprint'}
+            </Button>
+          )}
           <Button variant="whatsapp" onClick={sendClaimLink} disabled={claimBusy}>
             <MessageCircle className="h-4 w-4" /> {claimBusy ? 'Preparing…' : 'Send tracking link'}
           </Button>
@@ -421,6 +469,11 @@ export function AdminNewOrder() {
             : <Button onClick={reset}>New order</Button>}
         </div>
         {claimNote && <p className="mt-3 text-sm text-brand-500">{claimNote}</p>}
+        {printNote && (
+          <p className="mt-3 text-sm font-medium text-red-700">
+            {printNote} — the order is saved; tap Reprint once the printer is ready.
+          </p>
+        )}
       </div>
     );
   }
