@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Printer, Copy, Check } from 'lucide-react';
 import { receiptText } from '../../shared/lib/receiptText';
 import { whatsappSlip } from '../../shared/lib/whatsappSlip';
+import { PrinterBar } from '../components/PrinterBar';
 import { usePaperSetting, PAPER_OPTIONS } from '../hooks/usePaperSetting';
 import { adminOrdersApi } from '../api/endpoints';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -143,6 +144,7 @@ export function AdminOrderPrint() {
       {/* Thermal preview — exactly the characters the printer will receive, at
           the width it prints. Hidden when printing: this is a screen preview,
           and the paper itself comes from the printer, not the browser. */}
+      {paper !== 'a4' && <PrinterBar order={order} business={business} width={paper} />}
       {paper !== 'a4' && (
         <div className="mx-auto my-6 w-full max-w-md px-4 print:my-0 print:max-w-full print:px-0">
           <div className="print:hidden flex items-center justify-between pb-2">
