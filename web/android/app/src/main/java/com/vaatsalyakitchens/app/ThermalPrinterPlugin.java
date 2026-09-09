@@ -2,6 +2,7 @@ package com.vaatsalyakitchens.app;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothClass;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.os.Build;
@@ -86,6 +87,12 @@ public class ThermalPrinterPlugin extends Plugin {
      * Filtered on the service rather than shown wholesale: a counter phone is
      * paired with headsets, a car and a TV, and a picker listing all of them
      * invites someone to choose the wrong one at the worst moment.
+     *
+     * Device class filter: a set-top box paired with this counter genuinely
+     * advertises the SPP UUID, so UUID filtering alone misses it. We prioritize
+     * devices with major class IMAGING (which printers report), but fall back
+     * to all SPP devices if no Imaging device exists — a printer that reports
+     * an unusual class still appears rather than disappearing from the picker.
      */
     @PluginMethod
     public void listPaired(PluginCall call) {
@@ -104,6 +111,7 @@ public class ThermalPrinterPlugin extends Plugin {
         }
 
         JSArray devices = new JSArray();
+        JSArray imagingDevices = new JSArray();
         try {
             for (BluetoothDevice device : adapter.getBondedDevices()) {
                 if (!offersSpp(device)) {
@@ -113,15 +121,40 @@ public class ThermalPrinterPlugin extends Plugin {
                 entry.put("name", device.getName() != null ? device.getName() : device.getAddress());
                 entry.put("address", device.getAddress());
                 devices.put(entry);
+
+                // Check if this is an Imaging device (printers have major class 6).
+                // getBluetoothClass() can return null or throw SecurityException on
+                // some API levels; treat "class unknown" as "not Imaging" but do
+                // not drop the device — it survives via the fallback to all SPP devices.
+                if (isImagingDevice(device)) {
+                    imagingDevices.put(entry);
+                }
             }
         } catch (SecurityException e) {
             call.reject("Allow Bluetooth access to print.");
             return;
         }
 
+        // If any Imaging devices found, return only those. Otherwise return all SPP devices.
+        JSArray result = imagingDevices.length() > 0 ? imagingDevices : devices;
+
         JSObject res = new JSObject();
-        res.put("devices", devices);
+        res.put("devices", result);
         call.resolve(res);
+    }
+
+    private boolean isImagingDevice(BluetoothDevice device) {
+        try {
+            BluetoothClass btClass = device.getBluetoothClass();
+            if (btClass == null) {
+                return false;
+            }
+            return btClass.getMajorDeviceClass() == BluetoothClass.Device.Major.IMAGING;
+        } catch (SecurityException e) {
+            // Cannot read class; treat as "not Imaging" but the device survives
+            // via fallback to all SPP devices if no pure Imaging device exists.
+            return false;
+        }
     }
 
     private boolean offersSpp(BluetoothDevice device) {
