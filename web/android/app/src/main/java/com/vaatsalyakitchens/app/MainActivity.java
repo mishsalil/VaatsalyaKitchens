@@ -11,6 +11,7 @@ public class MainActivity extends BridgeActivity {
            the bridge is built and the web layer starts loading. Registering
            afterwards leaves the plugin invisible to JavaScript. */
         registerPlugin(DndAccessPlugin.class);
+        registerPlugin(ThermalPrinterPlugin.class);
 
         super.onCreate(savedInstanceState);
         /* Channels must exist before the first notification arrives — Android

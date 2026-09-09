@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Search, Minus, X, Check, Printer, UserCheck, Gift, MessageCircle, Clock } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -11,6 +11,10 @@ import { cartKey, type MenuItem } from '../../shared/types';
 import { kitchenOpenAt, categoryOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
 import { Button } from '../../shared/components/ui/Button';
 import { CustomerSuggest } from '../components/CustomerSuggest';
+import { usePaperSetting } from '../hooks/usePaperSetting';
+import { usePrinterSetting } from '../hooks/usePrinterSetting';
+import { printBlocks, printerSupported, PRINTER_SETTLE_MS } from '../../shared/print/thermalPrinter';
+import { documentsFor } from '../components/PrinterBar';
 
 /**
  * Counter order entry — the 100-200x/day lane.
@@ -86,6 +90,73 @@ export function AdminNewOrder() {
   const [placed, setPlaced] = useState<{ id: number; total: number; complimentary: boolean } | null>(null);
   const [claimBusy, setClaimBusy] = useState(false);
   const [claimNote, setClaimNote] = useState<string | null>(null);
+
+  const [paper] = usePaperSetting();
+  const { printer, autoPrint } = usePrinterSetting();
+  const [printNote, setPrintNote] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  const [printSuccess, setPrintSuccess] = useState(false);
+
+  /* The order is already saved before this runs. Printing can fail and the sale
+     still stands — which is why the failure shows a Reprint rather than
+     anything resembling an error about the order.
+     Each document is attempted individually and reported by name — so if the
+     bill prints and the kitchen ticket then fails, the operator knows exactly
+     which one to worry about, and Reprint (which reprints both) is never the
+     only option when only one of the two actually failed to come out. */
+  const printSaved = async () => {
+    if (!placed || !printer || paper === 'a4' || !printerSupported()) return;
+    setPrinting(true);
+    setPrintNote(null);
+    setPrintSuccess(false);
+    try {
+      const full = (await adminOrdersApi.show(placed.id)).order;
+      const header = settings?.print_header;
+      const business = {
+        name: header?.kitchen_name || 'Vaatsalya Kitchens',
+        address: header?.kitchen_address,
+        phone: header?.kitchen_phone_display,
+        email: header?.kitchen_email,
+        gstin: header?.gstin,
+        footer: header?.print_footer,
+      };
+      const docsToPrint = documentsFor('both', full, business, paper);
+      for (let i = 0; i < docsToPrint.length; i++) {
+        const doc = docsToPrint[i];
+        try {
+          await printBlocks(printer.address, doc.blocks);
+        } catch (e) {
+          setPrintNote(`${doc.label}: ${(e as Error).message}`);
+          return;
+        }
+        // Many SPP printers refuse a reconnect for a few hundred milliseconds
+        // after a disconnect — pause between documents so the second one is
+        // not the one that silently fails.
+        if (i < docsToPrint.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, PRINTER_SETTLE_MS));
+        }
+      }
+      setPrintSuccess(true);
+    } catch (e) {
+      setPrintNote((e as Error).message);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  // StrictMode double-invokes effects with no cleanup in development, which
+  // would fire printSaved() twice for the same order and waste paper. This
+  // ref remembers the last order id we already printed for, so the second
+  // invocation is a no-op — do not remove it as redundant.
+  const lastAutoPrintedId = useRef<number | null>(null);
+  useEffect(() => {
+    if (placed && autoPrint && lastAutoPrintedId.current !== placed.id) {
+      lastAutoPrintedId.current = placed.id;
+      void printSaved();
+    }
+    // Deliberately keyed on the order id alone: re-running on every render
+    // would print the same order repeatedly.
+  }, [placed?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const itemById = useMemo(() => {
     const m = new Map<number, MenuItem>();
@@ -292,6 +363,9 @@ export function AdminNewOrder() {
     setKnown(null); setCart({}); setQuery('');
     setDiscountPct(''); setDeliveryCharge(''); setComplimentary(false);
     setError(null); setPlaced(null); setClaimNote(null);
+    // Otherwise a failed print from the order just finished would render under
+    // the next order's confirmation screen, misattributed to it.
+    setPrintNote(null); setPrinting(false); setPrintSuccess(false);
   };
 
   /**
@@ -413,6 +487,11 @@ export function AdminNewOrder() {
           <Link to={`/admin/orders/${placed.id}/print`}>
             <Button variant="outline"><Printer className="h-4 w-4" /> Print slip</Button>
           </Link>
+          {printerSupported() && printer && paper !== 'a4' && (
+            <Button variant="outline" onClick={printSaved} disabled={printing}>
+              <Printer className="h-4 w-4" /> {printing ? 'Printing…' : 'Reprint'}
+            </Button>
+          )}
           <Button variant="whatsapp" onClick={sendClaimLink} disabled={claimBusy}>
             <MessageCircle className="h-4 w-4" /> {claimBusy ? 'Preparing…' : 'Send tracking link'}
           </Button>
@@ -421,6 +500,14 @@ export function AdminNewOrder() {
             : <Button onClick={reset}>New order</Button>}
         </div>
         {claimNote && <p className="mt-3 text-sm text-brand-500">{claimNote}</p>}
+        {printSuccess && !printNote && (
+          <p className="mt-3 text-xs text-brand-400">Receipt printed.</p>
+        )}
+        {printNote && (
+          <p className="mt-3 text-sm font-medium text-red-700">
+            {printNote} — the order is saved; tap Reprint once the printer is ready.
+          </p>
+        )}
       </div>
     );
   }
