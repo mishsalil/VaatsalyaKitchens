@@ -12,6 +12,7 @@ import { kitchenOpenAt, categoryOpenAt, nextOpenFrom, describeWhen } from '../..
 import { Button } from '../../shared/components/ui/Button';
 import { CustomerSuggest } from '../components/CustomerSuggest';
 import { usePaperSetting } from '../hooks/usePaperSetting';
+import { publicUrl } from '../../shared/lib/baseUrl';
 import { usePrinterSetting } from '../hooks/usePrinterSetting';
 import { printBlocks, printerSupported, PRINTER_SETTLE_MS } from '../../shared/print/thermalPrinter';
 import { documentsFor } from '../components/PrinterBar';
@@ -381,7 +382,10 @@ export function AdminNewOrder() {
     setClaimNote(null);
     try {
       const res = await adminOrdersApi.claimLink(placed.id);
-      const url = `${window.location.origin}/claim/${res.token}`;
+      /* publicUrl, NOT window.location.origin: inside the Android app the
+         origin is https://localhost, which would send the customer a link to
+         the counter phone's own bundle. */
+      const url = publicUrl(`/claim/${res.token}`);
       const msg = [
         `Namaste ${res.name.split(' ')[0]}! Your Vaatsalya Kitchens order #${placed.id} is confirmed.`,
         '',

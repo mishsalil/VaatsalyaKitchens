@@ -67,3 +67,24 @@ export function mediaUrl(path: string): string {
 export function appUrl(path: string): string {
   return join(getBasePath(), path);
 }
+
+/**
+ * An absolute URL fit to send to a customer — a claim link, a tracking link.
+ *
+ * window.location.origin is correct in a browser and WRONG in the app. The
+ * native shell serves the bundle from https://localhost, so a link built from
+ * the current origin arrives on the customer's phone as
+ * "https://localhost/claim/..." — a dead link that looks like a broken
+ * business. It went unnoticed because the browser admin, where origin IS the
+ * public site, produces the right link.
+ *
+ * A native build carries the real host in VITE_API_ORIGIN, and that host is the
+ * public site as well as the API, so prefer it and fall back to the current
+ * origin on the web. Deliberately NOT settings.base_url: that value is
+ * per-environment config and locally points at the retired PHP app on :8080,
+ * which is exactly the trap push.php documents.
+ */
+export function publicUrl(path: string): string {
+  const origin = API_ORIGIN || (typeof window !== 'undefined' ? window.location.origin : '');
+  return origin + (path.startsWith('/') ? path : '/' + path);
+}
