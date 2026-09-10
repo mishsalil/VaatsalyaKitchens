@@ -28,14 +28,17 @@ function review_token_issue(int $orderId): string
     $selector  = bin2hex(random_bytes(12));      // 24 chars, matches the column
     $validator = bin2hex(random_bytes(32));
 
+    /* expires_at is computed by the DATABASE, not PHP: it is compared against
+       MySQL's NOW() in review_token_resolve(), and PHP's clock can differ from
+       MySQL's by hours on this host. REVIEW_TOKEN_DAYS is still the single
+       source of the number; it's our own constant, not user input. */
     db()->prepare(
         'INSERT INTO review_tokens (order_id, selector, validator_hash, expires_at)
-         VALUES (?, ?, ?, ?)'
+         VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ' . (int)REVIEW_TOKEN_DAYS . ' DAY))'
     )->execute([
         $orderId,
         $selector,
         hash('sha256', $validator),
-        (new DateTime('+' . REVIEW_TOKEN_DAYS . ' days'))->format('Y-m-d H:i:s'),
     ]);
 
     return $selector . '.' . $validator;

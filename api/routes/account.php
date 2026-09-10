@@ -44,7 +44,10 @@ function route($method, $action, $parts): void
         );
         $stmt->execute([$customer['id'], setting('reviews_since', '1970-01-01 00:00:00')]);
 
-        $now = new DateTimeImmutable();
+        /* "Now" comes from the DATABASE, for the same reason as in
+           review_prompt_candidates(): every timestamp compared here was written
+           by MySQL, and PHP's clock can differ from it by hours. */
+        $now = new DateTimeImmutable((string)db()->query('SELECT NOW()')->fetchColumn());
         foreach ($stmt->fetchAll() as $order) {
             $dueAt = review_due_at($order);
             if ($dueAt !== null && new DateTimeImmutable($dueAt) <= $now) {
