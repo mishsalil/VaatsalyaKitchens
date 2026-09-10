@@ -16,7 +16,8 @@ export type AdminCap =
   | 'broadcast'
   | 'settings'
   | 'roles'
-  | 'print';
+  | 'print'
+  | 'reviews';
 
 /** Canonical role slugs in hierarchical order (broadest first). */
 export const ROLES: AdminRole[] = ['super', 'admin', 'manager', 'staff', 'rider'];
@@ -30,10 +31,10 @@ export const ROLE_LABELS: Record<AdminRole, string> = {
 };
 
 const CAPS_BY_ROLE: Record<AdminRole, AdminCap[]> = {
-  super: ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print'],
-  admin: ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'print'],
-  manager: ['dashboard', 'orders', 'new_order', 'menu', 'broadcast', 'print'],
-  staff: ['dashboard', 'orders', 'new_order', 'print'],
+  super: ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print', 'reviews'],
+  admin: ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'print', 'reviews'],
+  manager: ['dashboard', 'orders', 'new_order', 'menu', 'broadcast', 'print', 'reviews'],
+  staff: ['dashboard', 'orders', 'new_order', 'print', 'reviews'],
   rider: ['dashboard', 'orders', 'print'],
 };
 

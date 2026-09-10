@@ -17,6 +17,9 @@ function route($method, $action, $parts): void
         'revenue_today'    => (float)$pdo->query("SELECT COALESCE(SUM(total_estimate),0) AS s FROM orders WHERE status <> 'cancelled' AND DATE(created_at) = CURDATE()")->fetch()['s'],
         'customers'        => (int)$pdo->query('SELECT COUNT(*) AS c FROM customers')->fetch()['c'],
         'push_subscribers' => (int)$pdo->query('SELECT COUNT(*) AS c FROM push_subscriptions')->fetch()['c'],
+        'low_reviews_unacked' => (int)db()->query(
+            'SELECT COUNT(*) FROM order_reviews WHERE stars <= 2 AND acked_at IS NULL'
+        )->fetchColumn(),
     ];
 
     // Last 25 open orders (not delivered / not cancelled).

@@ -338,6 +338,31 @@ function route($method, $action, $parts): void
         ]);
     }
 
+    /* --- shareable rating link, for sending over WhatsApp by hand ---
+       Issues a FRESH token every time rather than reusing one: the plaintext
+       validator only exists at creation, and rotating a stored one would kill
+       the link the push already delivered. Many tokens per order is the design
+       (see includes/review_tokens.php). */
+    if ($action === 'rating_link' && $method === 'POST') {
+        require_admin_cap('orders');
+        $orderId = (int)($parts[3] ?? 0);
+        $stmt = db()->prepare('SELECT id, status FROM orders WHERE id = ?');
+        $stmt->execute([$orderId]);
+        $order = $stmt->fetch();
+        if (!$order) {
+            Response::error('Order not found', 404);
+        }
+        require_once __DIR__ . '/../../../includes/reviews.php';
+        require_once __DIR__ . '/../../../includes/review_tokens.php';
+        if (!review_eligible_status((string)$order['status'])) {
+            Response::error('This order cannot be rated yet.', 400);
+        }
+        Response::json([
+            'token' => review_token_issue($orderId),
+            'days'  => REVIEW_TOKEN_DAYS,
+        ]);
+    }
+
     // --- counter order entry ---
     // Mirrors orders.php::create (prices are always re-read from the DB, never
     // trusted from the client) but runs on the admin session and lands the order

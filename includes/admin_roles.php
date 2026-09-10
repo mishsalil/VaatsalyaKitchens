@@ -8,7 +8,7 @@
    already does SELECT *, so the column flows through with no query changes.
 
    Capability strings:
-     dashboard  orders  new_order  menu  customers  broadcast  settings  roles  print
+     dashboard  orders  new_order  menu  customers  broadcast  settings  roles  print  reviews
    `new_order` is counter order-entry (POST orders/create). Staff have it — they
    are the counter reps — but riders deliberately do not: a rider may view the
    board and mark Delivered, never open an order.
@@ -47,10 +47,10 @@ function admin_role_valid(string $role): bool
 function admin_caps_for_role(string $role): array
 {
     return match ($role) {
-        'super'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print'],
-        'admin'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'print'],
-        'manager' => ['dashboard', 'orders', 'new_order', 'menu', 'broadcast', 'print'],
-        'staff'   => ['dashboard', 'orders', 'new_order', 'print'],
+        'super'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print', 'reviews'],
+        'admin'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'print', 'reviews'],
+        'manager' => ['dashboard', 'orders', 'new_order', 'menu', 'broadcast', 'print', 'reviews'],
+        'staff'   => ['dashboard', 'orders', 'new_order', 'print', 'reviews'],
         'rider'   => ['dashboard', 'orders', 'print'],
         default   => ['dashboard'],
     };
