@@ -19,6 +19,7 @@ import { AddressCard } from '../components/AddressCard';
 import { ReorderButton } from '../components/ReorderButton';
 import { CancelCountdown } from '../components/CancelCountdown';
 import { PinSetup } from '../components/PinSetup';
+import { PendingReviewCard } from '../components/PendingReviewCard';
 import { PushNudge } from '../../shared/push/PushNudge';
 
 function ErrorBox({ msg }: { msg: string }) {
@@ -38,6 +39,8 @@ export function MyAccount() {
 
   return (
     <div className="container-page py-6">
+      <PendingReviewCard />
+
       {/* Profile header */}
       <div className="flex items-center gap-4">
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-900 text-cream-50">

@@ -13,6 +13,7 @@ import { useCart } from '../../shared/context/CartContext';
 import { PushNudge } from '../../shared/push/PushNudge';
 import { describeWeek } from '../../shared/lib/hours';
 import { DISH_PHOTO_IDS } from '../../shared/lib/dishPhotos';
+import { PendingReviewCard } from '../components/PendingReviewCard';
 
 const SERVICES = [
   { icon: PartyPopper, title: 'Small Parties', body: 'Birthdays, anniversaries and family functions for 10–50 guests. Curated veg menus, served hot, right on time.' },
@@ -108,6 +109,7 @@ export function Home() {
       </section>
 
       <div className="container-wide space-y-10 py-8">
+        <PendingReviewCard />
         <PushNudge surface="home" />
 
         {/* Categories quick-nav */}
