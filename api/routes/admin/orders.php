@@ -344,7 +344,7 @@ function route($method, $action, $parts): void
        the link the push already delivered. Many tokens per order is the design
        (see includes/review_tokens.php). */
     if ($action === 'rating_link' && $method === 'POST') {
-        require_admin_cap('orders');
+        require_admin_cap('reviews');
         $orderId = (int)($parts[3] ?? 0);
         $stmt = db()->prepare('SELECT id, status FROM orders WHERE id = ?');
         $stmt->execute([$orderId]);

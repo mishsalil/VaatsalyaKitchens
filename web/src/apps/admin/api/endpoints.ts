@@ -101,6 +101,9 @@ export const adminOrdersApi = {
     adminApi.post(`orders/claim_link/${orderId}`, {}) as Promise<{
       token: string; phone: string; name: string; has_pin: boolean; days: number;
     }>,
+  /** Mint a fresh rating-link token for manual sending (WhatsApp, by hand). */
+  ratingLink: (orderId: number) =>
+    adminApi.post(`orders/rating_link/${orderId}`, {}) as Promise<{ token: string; days: number }>,
 };
 
 /** Variant row sent to add_item/update_item (full-replace). id is optional on edit. */

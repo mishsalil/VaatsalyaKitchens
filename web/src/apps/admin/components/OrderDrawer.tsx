@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, MessageCircle, MapPin, Clock, Tag, StickyNote, Pencil, History } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, Clock, Tag, StickyNote, Pencil, History, Copy, Check } from 'lucide-react';
 import { Sheet } from '../../shared/components/ui/Sheet';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { Skeleton } from '../../shared/components/Skeleton';
@@ -8,11 +8,16 @@ import { useToast } from '../../shared/context/ToastContext';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { adminOrdersApi } from '../api/endpoints';
 import { rupees, displayPhone } from '../../shared/lib/format';
+import { publicUrl } from '../../shared/lib/baseUrl';
 import { lineLabel } from '../../shared/types';
 import type { AdminOrder, AdminOrderEvent } from '../types';
 import type { OrderStatus } from '../../shared/types';
 
 const STATUSES: OrderStatus[] = ['new', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'cancelled'];
+
+/* Mirrors review_eligible_status() in includes/reviews.php: `new` was never
+   confirmed (likely nothing was cooked) and `cancelled` has nothing to rate. */
+const RATEABLE_STATUSES: OrderStatus[] = ['confirmed', 'preparing', 'out_for_delivery', 'delivered'];
 
 type Props = {
   orderId: number | null;
@@ -26,8 +31,14 @@ export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
   const [order, setOrder] = useState<AdminOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [ratingLinkBusy, setRatingLinkBusy] = useState(false);
+  const [ratingLinkCopied, setRatingLinkCopied] = useState(false);
+  const [ratingLinkError, setRatingLinkError] = useState<string | null>(null);
 
   useEffect(() => {
+    setRatingLinkBusy(false);
+    setRatingLinkCopied(false);
+    setRatingLinkError(null);
     if (orderId == null) {
       setOrder(null);
       return;
@@ -56,6 +67,41 @@ export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  /* Manual WhatsApp sending — the owner explicitly chose this as a delivery
+     channel alongside the automatic push. Mints a FRESH token every time
+     (many tokens can be live for one order; see includes/review_tokens.php),
+     so copying twice never rotates or kills a link already sent. Built with
+     publicUrl(), never window.location.origin: the counter runs the packaged
+     APK, where the origin is https://localhost — a bug already fixed once for
+     the claim link (commit 979215c) and worth avoiding here from the start. */
+  const copyRatingLink = async () => {
+    if (!order || ratingLinkBusy) return;
+    setRatingLinkBusy(true);
+    setRatingLinkError(null);
+    try {
+      const res = await adminOrdersApi.ratingLink(order.id);
+      const url = publicUrl(`/rate/${res.token}`);
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setRatingLinkCopied(true);
+      setTimeout(() => setRatingLinkCopied(false), 2000);
+    } catch (e) {
+      setRatingLinkError((e as Error).message);
+    } finally {
+      setRatingLinkBusy(false);
     }
   };
 
@@ -103,16 +149,33 @@ export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
             </span>
           </div>
 
-          {/* Editing is refused server-side once an order is delivered or
-              cancelled, so don't offer it there either. */}
-          {can('new_order') && order.status !== 'delivered' && order.status !== 'cancelled' && (
-            <Link
-              to={`/admin/orders/${order.id}/edit`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-cream-100"
-            >
-              <Pencil className="h-3.5 w-3.5" /> Edit this order
-            </Link>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Editing is refused server-side once an order is delivered or
+                cancelled, so don't offer it there either. */}
+            {can('new_order') && order.status !== 'delivered' && order.status !== 'cancelled' && (
+              <Link
+                to={`/admin/orders/${order.id}/edit`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-cream-100"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Edit this order
+              </Link>
+            )}
+
+            {/* Manual WhatsApp channel for the rating link — riders hold
+                `orders` but not `reviews`, so this mirrors the server gate. */}
+            {can('reviews') && RATEABLE_STATUSES.includes(order.status) && (
+              <button
+                type="button"
+                onClick={() => void copyRatingLink()}
+                disabled={ratingLinkBusy}
+                className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 px-3 py-1.5 text-sm font-semibold text-brand-700 hover:bg-cream-100 disabled:opacity-50"
+              >
+                {ratingLinkCopied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {ratingLinkCopied ? 'Copied' : ratingLinkBusy ? 'Copying…' : 'Copy rating link'}
+              </button>
+            )}
+          </div>
+          {ratingLinkError && <p className="text-xs text-red-700">{ratingLinkError}</p>}
 
           {/* Customer */}
           <Section icon={<Phone className="h-4 w-4" />} title="Customer">
