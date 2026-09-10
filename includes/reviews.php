@@ -153,7 +153,14 @@ const REVIEW_PROMPT_MAX_ATTEMPTS = 3;
  */
 function review_prompt_candidates(int $limit = 50): array
 {
-    $since = setting('reviews_since', '1970-01-01 00:00:00');
+    /* Fail CLOSED. This is the cutover that stops the sweep messaging customers
+       about meals from before the feature existed. If the row is missing, the
+       safe answer is to prompt nobody and let someone notice the silence — an
+       epoch default would instead push to every customer who ever ordered. */
+    $since = setting('reviews_since');
+    if ($since === null || trim($since) === '') {
+        return [];
+    }
 
     $stmt = db()->prepare(
         'SELECT o.id, o.customer_id, o.status, o.delivered_at, o.needed_at, o.created_at
