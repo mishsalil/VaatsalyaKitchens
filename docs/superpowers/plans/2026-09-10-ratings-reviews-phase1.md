@@ -16,6 +16,7 @@
 - **Verification scripts that touch the database build their own throwaway database** and drop it at the end, following `scripts/verify-menu-snapshot.php`. Never run destructive SQL against the developer's real database.
 - **Migrations live in three files that must stay in step:** `database/migration_0NN_*.sql` (the numbered file), `database/migrate_production.sql` (idempotent, `information_schema`-guarded), and `database/install_fresh.sql`. `scripts/verify-cumulative-migration.php` and `scripts/verify-install-file.php` check this.
 - **PHP is not on PATH.** Use the XAMPP binary: `C:\xampp\php\php.exe`. Commands below are written as `php` for readability.
+- **The local database is `vaatsalya_kitchens`** (per `includes/config.php`), and the MySQL client is `C:\xampp\mysql\bin\mysql.exe`.
 - **The migration number for this feature is 013.**
 - **Never render customer-typed text with `dangerouslySetInnerHTML`.** React escapes by default; that is the whole defence.
 - **Absolute URLs sent to customers use `publicUrl()`** from `web/src/apps/shared/lib/baseUrl.ts`, never `window.location.origin` — the packaged APK's origin is `https://localhost`.
@@ -265,7 +266,7 @@ Expected: all three PASS. If `verify-review-schema.php` reports a table differin
 
 - [ ] **Step 7: Apply the migration to the local development database**
 
-Run: `C:\xampp\mysql\bin\mysql.exe -u root vaatsalya < database/migration_013_reviews.sql`
+Run: `C:\xampp\mysql\bin\mysql.exe -u root vaatsalya_kitchens < database/migration_013_reviews.sql`
 Expected: no errors. Later tasks need these tables locally.
 
 - [ ] **Step 8: Commit**
