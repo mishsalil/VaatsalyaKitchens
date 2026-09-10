@@ -2180,8 +2180,10 @@ export function AdminReviews() {
     setLoading(true);
     setError(null);
     try {
+      /* adminApi prepends "admin/" itself (see adminUrl in the admin client),
+         so the endpoint here is "reviews", NOT "admin/reviews". */
       const qs = onlyLowUnacked ? '?max_stars=2&acked=0' : '';
-      const data = await adminApi.get(`admin/reviews${qs}`);
+      const data = await adminApi.get(`reviews${qs}`);
       setReviews(data.reviews);
     } catch (e) {
       setError((e as Error).message);
@@ -2193,7 +2195,7 @@ export function AdminReviews() {
   useEffect(() => { void load(); }, [load]);
 
   async function ack(id: number) {
-    await adminApi.post(`admin/reviews/ack/${id}`, {});
+    await adminApi.post(`reviews/ack/${id}`, {});
     await load();
   }
 
