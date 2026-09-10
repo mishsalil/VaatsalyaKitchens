@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Star, Phone, Check } from 'lucide-react';
+import { Star, Phone, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { adminReviewsApi } from '../api/endpoints';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { SkeletonRows } from '../../shared/components/Skeleton';
@@ -22,14 +22,21 @@ function Stars({ n }: { n: number }) {
  * is to get someone on the phone to an unhappy customer today — not to browse
  * praise.
  */
+/** Matches the server's hardcoded page size in api/routes/admin/reviews.php. */
+const PER_PAGE = 25;
+
 export function AdminReviews() {
   const [onlyLowUnacked, setOnlyLowUnacked] = useState(true);
+  const [page, setPage] = useState(1);
 
   const { data, loading, error, refetch } = useFetch(
-    () => adminReviewsApi.list(onlyLowUnacked ? { max_stars: 2, acked: 0 } : {}),
-    [onlyLowUnacked],
+    () => adminReviewsApi.list(onlyLowUnacked ? { max_stars: 2, acked: 0, page } : { page }),
+    [onlyLowUnacked, page],
   );
   const reviews = data?.reviews ?? [];
+  const total = data?.total ?? 0;
+  const rangeStart = total === 0 ? 0 : (page - 1) * PER_PAGE + 1;
+  const rangeEnd = Math.min(page * PER_PAGE, total);
 
   const [ackError, setAckError] = useState<string | null>(null);
   const [ackingId, setAckingId] = useState<number | null>(null);
@@ -58,7 +65,7 @@ export function AdminReviews() {
           <input
             type="checkbox"
             checked={onlyLowUnacked}
-            onChange={(e) => setOnlyLowUnacked(e.target.checked)}
+            onChange={(e) => { setOnlyLowUnacked(e.target.checked); setPage(1); }}
           />
           Needs follow-up
         </label>
@@ -124,6 +131,30 @@ export function AdminReviews() {
           </ul>
         )}
       </div>
+
+      {total > 0 && (
+        <div className="mt-4 flex items-center justify-between text-sm text-brand-600">
+          <span>Showing {rangeStart}–{rangeEnd} of {total}</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="inline-flex items-center gap-1 rounded-full border border-cream-300 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-cream-100 disabled:opacity-50"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" /> Prev
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={rangeEnd >= total}
+              className="inline-flex items-center gap-1 rounded-full border border-cream-300 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-cream-100 disabled:opacity-50"
+            >
+              Next <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

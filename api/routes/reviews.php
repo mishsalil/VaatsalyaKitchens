@@ -46,7 +46,7 @@ function review_route_get(int $orderId): void
 {
     $db = db();
     $stmt = $db->prepare(
-        'SELECT o.id, o.name, o.created_at,
+        'SELECT o.id, o.name, o.status, o.created_at,
                 (SELECT COUNT(*) FROM order_reviews r WHERE r.order_id = o.id) AS reviewed
            FROM orders o WHERE o.id = ?'
     );
@@ -54,6 +54,16 @@ function review_route_get(int $orderId): void
     $order = $stmt->fetch();
     if (!$order) {
         Response::error('That order no longer exists.', 404);
+    }
+
+    /* review_submit() refuses an ineligible order (e.g. cancelled) with this
+       same message. Checking it here too means a dead link shows the page's
+       "this link isn't valid" state up front, instead of walking the customer
+       through five taps and a comment only to 400 on submit. Skipped once the
+       order is already reviewed — its status may have moved on since (the
+       review itself is what matters, not what happened to the order after). */
+    if ((int)$order['reviewed'] === 0 && !review_eligible_status((string)$order['status'])) {
+        Response::error('That order cannot be rated.', 400);
     }
 
     $lStmt = $db->prepare(

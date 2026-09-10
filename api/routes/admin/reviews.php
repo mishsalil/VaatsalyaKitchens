@@ -93,6 +93,12 @@ function route($method, $action, $parts): void
               WHERE id = ? AND acked_at IS NULL'
         );
         $stmt->execute([(int)$admin['id'], (string)$admin['username'], $id]);
+        /* This screen exists so a complaint is never silently dropped — an ack
+           that quietly no-ops (unknown id, or already acked by someone else)
+           must not report success. */
+        if ($stmt->rowCount() === 0) {
+            Response::error('That review was not found, or has already been followed up.', 404);
+        }
         Response::success('Marked as followed up');
     }
 
