@@ -879,7 +879,9 @@ foreach (stmts('database/install_fresh.sql') as $s) {
 }
 
 require 'includes/reviews.php';
-require 'includes/review_tokens.php';
+/* require_once, not require: includes/reviews.php already pulls this in, and a
+   second plain require fatals with "Cannot redeclare review_token_issue()". */
+require_once 'includes/review_tokens.php';
 
 $pass = 0; $fail = 0;
 function check(string $what, bool $ok): void {
@@ -1078,7 +1080,8 @@ function review_submit(int $orderId, int $stars, ?string $comment, array $items,
 - [ ] **Step 4: Run it to verify it passes**
 
 Run: `php scripts/verify-review-validation.php`
-Expected: PASS, `19 passed, 0 failed`.
+Expected: PASS, `20 passed, 0 failed` (the four bad-star cases come from one `foreach`, so the
+assertion count exceeds the number of `check(` lines).
 
 - [ ] **Step 5: Write `api/routes/reviews.php`**
 
