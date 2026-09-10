@@ -248,7 +248,19 @@ second row.
 **Authenticated customer** — added to `api/routes/account.php`:
 
 - `GET /api/account/pending-review` → the most recent eligible unrated order, or
-  null, including its rating token so the in-app card links into the same flow.
+  null. **The order id only — no token.**
+- `POST /api/account/review-link` → `{ order_id }`, returning `{ token }`.
+
+**The token is minted on the tap, not on the render**, and that split is not
+cosmetic. The card mounts on both Home and MyAccount, so minting during render
+inserted a fourteen-day credential on every page view, unbounded, with nothing
+pruning them. A rating token cannot be reused instead — the plaintext validator
+exists for one instant at creation and is never stored — so the only way to stop
+the bleed is to issue it at the moment the customer actually asks.
+
+The mint path re-checks everything: that the caller is signed in, that the order
+is theirs, that it is still unrated, and that it is still due. Every refusal
+returns the same message, so it never discloses whether an order exists.
 
 One flow, two doors. The card and the pushed link land on the same page.
 
