@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Users, Clock, IndianRupee, PackageOpen } from 'lucide-react';
+import { Bell, Users, Clock, IndianRupee, PackageOpen, MessageSquareWarning } from 'lucide-react';
 import { adminDashboardApi } from '../api/endpoints';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { rupees } from '../../shared/lib/format';
@@ -42,6 +42,14 @@ export function AdminDashboard() {
             <StatTile icon={<IndianRupee className="h-5 w-5" />} label="Revenue today" value={rupees(stats.revenue_today)} accent="emerald" />
             <StatTile icon={<Users className="h-5 w-5" />} label="Customers" value={stats.customers} />
             <StatTile icon={<Bell className="h-5 w-5" />} label="Push subs" value={stats.push_subscribers} />
+            <button type="button" onClick={() => navigate('/admin/reviews')} className="text-left">
+              <StatTile
+                icon={<MessageSquareWarning className="h-5 w-5" />}
+                label="Reviews to follow up"
+                value={stats.low_reviews_unacked}
+                accent="maroon"
+              />
+            </button>
           </>
         ) : null}
       </div>

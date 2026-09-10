@@ -43,6 +43,27 @@ export interface AdminDashboardStats {
   revenue_today: number;
   customers: number;
   push_subscribers: number;
+  low_reviews_unacked: number;
+}
+
+/** One dish rated within a review. */
+export interface AdminReviewDish {
+  item_name: string;
+  stars: number;
+}
+
+export interface AdminReview {
+  id: number;
+  order_id: number;
+  stars: number;
+  comment: string | null;
+  source: string;
+  created_at: string;
+  acked_at: string | null;
+  acked_label: string | null;
+  name: string;
+  phone: string;
+  dishes: AdminReviewDish[];
 }
 
 /** Kanban card / list row. */

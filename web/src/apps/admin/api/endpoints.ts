@@ -13,6 +13,7 @@ import type {
   AdminSettingsFull,
   AdminSettingsResponse,
   AdminTeamUser,
+  AdminReview,
 } from '../types';
 import type { OrderStatus } from '../../shared/types';
 
@@ -240,6 +241,30 @@ export const adminMenuImageApi = {
   /** Remove one slot, or every photo for the item when slot is omitted. */
   remove: (itemId: number, slot?: number) =>
     adminApi.post(`menu/delete_image/${itemId}`, slot === undefined ? {} : { slot }),
+};
+
+/** min_stars/max_stars/acked/page all optional — omitted params are unfiltered. */
+export interface AdminReviewsQuery {
+  min_stars?: number;
+  max_stars?: number;
+  acked?: 0 | 1;
+  page?: number;
+}
+
+function reviewsQueryString(q: AdminReviewsQuery): string {
+  const params = new URLSearchParams();
+  if (q.min_stars !== undefined) params.set('min_stars', String(q.min_stars));
+  if (q.max_stars !== undefined) params.set('max_stars', String(q.max_stars));
+  if (q.acked !== undefined) params.set('acked', String(q.acked));
+  if (q.page !== undefined) params.set('page', String(q.page));
+  const s = params.toString();
+  return s ? `?${s}` : '';
+}
+
+export const adminReviewsApi = {
+  list: (q: AdminReviewsQuery = {}) =>
+    adminApi.get(`reviews${reviewsQueryString(q)}`) as Promise<{ total: number; reviews: AdminReview[] }>,
+  ack: (id: number) => adminApi.post(`reviews/ack/${id}`, {}) as Promise<{ success: string }>,
 };
 
 export const adminBroadcastApi = {
