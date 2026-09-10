@@ -177,7 +177,12 @@ function review_prompt_candidates(int $limit = 50): array
     );
     $stmt->execute([$since, REVIEW_PROMPT_MAX_ATTEMPTS]);
 
-    $now = new DateTimeImmutable();
+    /* "Now" comes from the DATABASE, not from PHP. delivered_at, needed_at and
+       created_at were all written by MySQL, and on a host where PHP's timezone
+       differs from the database's (this project sets neither) comparing them to
+       PHP's clock shifts every prompt by the offset — silently, with the tests
+       still green. Same clock in, same clock out. */
+    $now = new DateTimeImmutable((string)db()->query('SELECT NOW()')->fetchColumn());
     $due = [];
     foreach ($stmt->fetchAll() as $order) {
         $dueAt = review_due_at($order);
@@ -203,7 +208,7 @@ function review_prompt_record(int $orderId, string $dueAt, bool $sent, ?string $
 {
     db()->prepare(
         'INSERT INTO review_prompts (order_id, due_at, sent_at, attempts, last_error)
-         VALUES (?, ?, ?, 1, ?)
+         VALUES (?, ?, ' . ($sent ? 'NOW()' : 'NULL') . ', 1, ?)
          ON DUPLICATE KEY UPDATE
             due_at     = VALUES(due_at),
             sent_at    = COALESCE(review_prompts.sent_at, VALUES(sent_at)),
@@ -212,7 +217,6 @@ function review_prompt_record(int $orderId, string $dueAt, bool $sent, ?string $
     )->execute([
         $orderId,
         $dueAt,
-        $sent ? (new DateTime())->format('Y-m-d H:i:s') : null,
         $error === null ? null : mb_substr($error, 0, 190),
     ]);
 }

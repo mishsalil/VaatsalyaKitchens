@@ -46,7 +46,12 @@ function mk(PDO $pdo, int $custId, string $status, ?string $deliveredAt, ?string
 }
 
 $long = (new DateTime('-1 day'))->format('Y-m-d H:i:s');
-$recent = (new DateTime('-5 minutes'))->format('Y-m-d H:i:s');
+/* Built from the DATABASE clock: delivered_at is written by MySQL's NOW() in
+   production (see api/routes/admin/orders.php), and review_prompt_candidates()
+   now compares against MySQL's NOW() too. Building this from PHP's clock would
+   make the test flaky on any host where the two clocks disagree. */
+$recent = (new DateTime((string)$pdo->query('SELECT NOW()')->fetchColumn()))
+    ->modify('-5 minutes')->format('Y-m-d H:i:s');
 
 echo "picked up\n";
 $due       = mk($pdo, $custId, 'delivered', $long, null, $long);
@@ -99,6 +104,19 @@ $rows = array_values(array_filter(review_prompt_candidates(), fn($r) => (int)$r[
 check('still a candidate after delivery was marked', $rows !== []);
 check('recomputed due_at uses delivered_at + 30',
     $rows !== [] && review_due_at($rows[0]) === (new DateTime($deliveredNow))->modify('+30 minutes')->format('Y-m-d H:i:s'));
+
+echo "\ndatabase clock, not PHP's\n";
+$dbNow = (string)$pdo->query('SELECT NOW()')->fetchColumn();
+$recent2 = (new DateTime($dbNow))->modify('-40 minutes')->format('Y-m-d H:i:s');
+$fresh = mk($pdo, $custId, 'delivered', $recent2, null, $recent2);
+check('delivered 40 minutes ago (db clock) is already due',
+    in_array($fresh, ids(review_prompt_candidates()), true));
+
+review_prompt_record($fresh, review_due_at(['status' => 'delivered', 'delivered_at' => $recent2,
+    'needed_at' => null, 'created_at' => $recent2]), true, null);
+$row = $pdo->query("SELECT ABS(TIMESTAMPDIFF(SECOND, created_at, sent_at)) AS drift
+                      FROM review_prompts WHERE order_id = $fresh")->fetch(PDO::FETCH_ASSOC);
+check('sent_at and created_at come from the same clock', (int)$row['drift'] < 60);
 
 $pdo->exec("DROP DATABASE IF EXISTS `$db`");
 echo "\n$pass passed, $fail failed\n";
