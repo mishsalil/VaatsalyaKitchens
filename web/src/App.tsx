@@ -8,6 +8,7 @@ import { OrderSuccess } from './apps/storefront/pages/OrderSuccess';
 import { MyAccount } from './apps/storefront/pages/MyAccount';
 import { Login } from './apps/storefront/pages/Login';
 import { Claim } from './apps/storefront/pages/Claim';
+import { Rate } from './apps/storefront/pages/Rate';
 import { Privacy } from './apps/storefront/legal/Privacy';
 import { Terms } from './apps/storefront/legal/Terms';
 import { Refunds } from './apps/storefront/legal/Refunds';
@@ -49,6 +50,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         {/* One-time claim link from a counter order (WhatsApped by the rep). */}
         <Route path="/claim/:token" element={<Claim />} />
+        {/* One-time rating link (WhatsApp/push), opened after delivery — no login. */}
+        <Route path="/rate/:token" element={<Rate />} />
 
         {/* Policy pages. Plain routes, not lazy: a payment-gateway reviewer and
             a search crawler must both get the content on the first request. */}
