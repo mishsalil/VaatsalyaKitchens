@@ -86,9 +86,12 @@ PHP and MySQL disagree about the current time on the development machine (PHP
 defaults to the `Europe/Berlin` timezone, MySQL uses system time), and this
 project sets no default timezone anywhere. For that reason the review feature
 takes every "now" from the database rather than from PHP, and
-`scripts/verify-review-clocks.php` fails the build if any feature file reaches
-for PHP's clock again — worth knowing if this gets deployed to a host with its
-own timezone quirks.
+`scripts/verify-review-clocks.php` scans a fixed list of the feature's files
+and fails the build if any of them reaches for PHP's clock again, or if one
+of those files goes missing. It does not cover files outside that list — a
+new file added by a later phase must be added to the script's `$files` list
+too — worth knowing if this gets deployed to a host with its own timezone
+quirks.
 
 ## Running locally (for development)
 

@@ -42,6 +42,12 @@ $violations = [];
 foreach ($files as $rel) {
     $path = $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $rel);
     if (!is_file($path)) {
+        $violations[] = [
+            'file' => $rel,
+            'line' => 0,
+            'what' => 'missing file',
+            'text' => '(scanned file does not exist - update the $files list in this script)',
+        ];
         continue;
     }
     $lines = file($path);
