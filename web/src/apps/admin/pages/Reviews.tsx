@@ -31,9 +31,20 @@ export function AdminReviews() {
   );
   const reviews = data?.reviews ?? [];
 
+  const [ackError, setAckError] = useState<string | null>(null);
+  const [ackingId, setAckingId] = useState<number | null>(null);
+
   async function ack(id: number) {
-    await adminReviewsApi.ack(id);
-    refetch();
+    setAckingId(id);
+    setAckError(null);
+    try {
+      await adminReviewsApi.ack(id);
+      refetch();
+    } catch (e) {
+      setAckError((e as Error).message);
+    } finally {
+      setAckingId(null);
+    }
   }
 
   return (
@@ -54,6 +65,7 @@ export function AdminReviews() {
       </div>
 
       {error && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {ackError && <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{ackError}</p>}
 
       <div className="mt-4">
         {loading && !data ? (
@@ -100,7 +112,8 @@ export function AdminReviews() {
                     <button
                       type="button"
                       onClick={() => void ack(r.id)}
-                      className="rounded-lg border border-cream-300 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-cream-100"
+                      disabled={ackingId === r.id}
+                      className="rounded-lg border border-cream-300 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-cream-100 disabled:opacity-50"
                     >
                       Mark followed up
                     </button>
