@@ -34,6 +34,11 @@ export const addressesApi = {
 
 export const accountApi = {
   setPin: (pin: string) => api.post('account/set-pin', { pin }),
+  /** The most recent unrated order due for a prompt, or null. Display only —
+   *  mints no token. See reviewLink() for that. */
+  pendingReview: () => api.get('account/pending-review') as Promise<{ order_id: number | null }>,
+  /** Mint a rating token for one order, on intent (a tap), not on render. */
+  reviewLink: (orderId: number) => api.post('account/review-link', { order_id: orderId }) as Promise<{ token: string }>,
 };
 
 export const pushApi = {

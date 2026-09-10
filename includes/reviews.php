@@ -51,6 +51,102 @@ function review_due_at(array $order): ?string
     return $base->modify('+' . $mins . ' minutes')->format('Y-m-d H:i:s');
 }
 
+/**
+ * Fail-closed accessor for the `reviews_since` cutover setting.
+ *
+ * review_prompt_candidates() and the two account.php consumers below (the
+ * pending-review card and the review-link mint) all decide "is this order
+ * due for a prompt right now?" and MUST agree on the cutover, because
+ * disagreeing here is exactly how a missing/blank setting once turned into
+ * every customer seeing a rate-card for a meal from before the feature
+ * existed. Returns null — never an epoch default — when the row is missing
+ * or blank, so every caller's only correct response to null is "show/mint
+ * nothing".
+ */
+function review_cutover_since(): ?string
+{
+    $since = setting('reviews_since');
+    if ($since === null || trim($since) === '') {
+        return null;
+    }
+    return $since;
+}
+
+/**
+ * The most recent order due for a review prompt for this customer, or null.
+ *
+ * Shared by GET /api/account/pending-review (display only) and the fixture
+ * check in scripts/verify-review-cutover.php. Fails closed via
+ * review_cutover_since() — see that function's comment.
+ */
+function review_next_due_order_for_customer(int $customerId): ?array
+{
+    $since = review_cutover_since();
+    if ($since === null) {
+        return null;
+    }
+
+    $stmt = db()->prepare(
+        'SELECT o.id, o.status, o.delivered_at, o.needed_at, o.created_at
+           FROM orders o
+           LEFT JOIN order_reviews r ON r.order_id = o.id
+          WHERE o.customer_id = ?
+            AND o.created_at >= ?
+            AND r.id IS NULL
+          ORDER BY o.id DESC
+          LIMIT 5'
+    );
+    $stmt->execute([$customerId, $since]);
+
+    /* "Now" comes from the DATABASE, for the same reason as in
+       review_prompt_candidates(): every timestamp compared here was written
+       by MySQL, and PHP's clock can differ from it by hours. */
+    $now = new DateTimeImmutable((string)db()->query('SELECT NOW()')->fetchColumn());
+    foreach ($stmt->fetchAll() as $order) {
+        $dueAt = review_due_at($order);
+        if ($dueAt !== null && new DateTimeImmutable($dueAt) <= $now) {
+            return $order;
+        }
+    }
+    return null;
+}
+
+/**
+ * A single order, checked for one specific customer: unrated, still due,
+ * and belonging to them. Used by POST /api/account/review-link, which mints
+ * a token only on intent (a tap), not on every render of the pending-review
+ * card. Same fail-closed cutover as review_next_due_order_for_customer().
+ */
+function review_due_order_for_customer(int $orderId, int $customerId): ?array
+{
+    $since = review_cutover_since();
+    if ($since === null) {
+        return null;
+    }
+
+    $stmt = db()->prepare(
+        'SELECT o.id, o.status, o.delivered_at, o.needed_at, o.created_at
+           FROM orders o
+           LEFT JOIN order_reviews r ON r.order_id = o.id
+          WHERE o.id = ?
+            AND o.customer_id = ?
+            AND o.created_at >= ?
+            AND r.id IS NULL'
+    );
+    $stmt->execute([$orderId, $customerId, $since]);
+    $order = $stmt->fetch();
+    if (!$order) {
+        return null;
+    }
+
+    $now = new DateTimeImmutable((string)db()->query('SELECT NOW()')->fetchColumn());
+    $dueAt = review_due_at($order);
+    if ($dueAt === null || new DateTimeImmutable($dueAt) > $now) {
+        return null;
+    }
+    return $order;
+}
+
 /** Longest comment we store. Beyond this it is not feedback, it is a payload. */
 const REVIEW_COMMENT_MAX = 1000;
 
@@ -97,6 +193,7 @@ function review_submit(int $orderId, int $stars, ?string $comment, array $items,
     foreach ($lStmt->fetchAll() as $l) {
         $lines[(int)$l['id']] = $l['menu_item_id'] === null ? null : (int)$l['menu_item_id'];
     }
+    $seenLineIds = [];
     foreach ($items as $item) {
         $lineId = (int)($item['order_item_id'] ?? 0);
         $lineStars = (int)($item['stars'] ?? 0);
@@ -106,6 +203,14 @@ function review_submit(int $orderId, int $stars, ?string $comment, array $items,
         if ($lineStars < 1 || $lineStars > 5) {
             throw new InvalidArgumentException('Please choose between 1 and 5 stars for each dish.');
         }
+        /* Caught here, before the transaction opens, so a hand-built request
+           with the same order_item_id twice gets a clear message instead of
+           tripping the uq_item_review constraint and being misreported as
+           "already rated" by the 23000 handler below. */
+        if (isset($seenLineIds[$lineId])) {
+            throw new InvalidArgumentException('Each dish can only be rated once.');
+        }
+        $seenLineIds[$lineId] = true;
     }
 
     $db->beginTransaction();
@@ -156,9 +261,11 @@ function review_prompt_candidates(int $limit = 50): array
     /* Fail CLOSED. This is the cutover that stops the sweep messaging customers
        about meals from before the feature existed. If the row is missing, the
        safe answer is to prompt nobody and let someone notice the silence — an
-       epoch default would instead push to every customer who ever ordered. */
-    $since = setting('reviews_since');
-    if ($since === null || trim($since) === '') {
+       epoch default would instead push to every customer who ever ordered.
+       Shared with the account.php consumers via review_cutover_since() so all
+       three agree on this. */
+    $since = review_cutover_since();
+    if ($since === null) {
         return [];
     }
 

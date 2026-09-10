@@ -69,6 +69,15 @@ if (!$dueAtOk) {
 /* Check B: with reviews_since missing, the guard must return nothing. */
 check('guard returns no candidates when reviews_since is missing', review_prompt_candidates() === []);
 
+/* Check C: the customer-facing side (account.php's pending-review card) must
+   fail closed the same way. It rests on the same fixture proved due in
+   Check A, so this fails if review_next_due_order_for_customer() ever stops
+   consulting review_cutover_since() rather than passing vacuously. */
+check(
+    'review_next_due_order_for_customer() returns nothing when reviews_since is missing',
+    review_next_due_order_for_customer($custId) === null
+);
+
 $pdo->exec("DROP DATABASE IF EXISTS `$db`");
 echo "\n$pass passed, $fail failed\n";
 exit($fail === 0 ? 0 : 1);
