@@ -62,6 +62,34 @@ can order easily.
 That's it. Orders will appear in `/admin` and customers register themselves
 just by ordering.
 
+## Review prompts (cron)
+
+`scripts/send-review-prompts.php` sends the "how was your meal?" push. It is the
+only scheduled job in the project, and **nothing works without it**: the rule
+"60 minutes after the scheduled time when delivery was never marked" has no
+other trigger.
+
+Set it up once in Hostinger hPanel → Advanced → Cron Jobs:
+
+- **Schedule:** every 5 minutes (`*/5 * * * *`)
+- **Command:**
+  `/usr/bin/php /home/<user>/domains/vaatsalyakitchens.in/scripts/send-review-prompts.php`
+
+Add `--verbose` while testing to see what it picked up. It takes a MySQL
+advisory lock, so overlapping runs are safe — a second copy exits immediately.
+
+Orders created before the `reviews_since` setting (written when migration 013
+ran) are never prompted, so enabling the cron cannot message customers about old
+meals.
+
+PHP and MySQL disagree about the current time on the development machine (PHP
+defaults to the `Europe/Berlin` timezone, MySQL uses system time), and this
+project sets no default timezone anywhere. For that reason the review feature
+takes every "now" from the database rather than from PHP, and
+`scripts/verify-review-clocks.php` fails the build if any feature file reaches
+for PHP's clock again — worth knowing if this gets deployed to a host with its
+own timezone quirks.
+
 ## Running locally (for development)
 
 ```bash
