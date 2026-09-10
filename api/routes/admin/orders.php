@@ -573,7 +573,13 @@ function route($method, $action, $parts): void
            really becomes cancelled. A rep-initiated cancellation is already
            cancelled; confirming only records that the kitchen was told. */
         if ($wasRequested && $order['status'] !== 'cancelled') {
-            db()->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute(['cancelled', $id]);
+            db()->prepare(
+                'UPDATE orders
+                    SET status = ?,
+                        delivered_at = CASE WHEN ? = \'delivered\' AND delivered_at IS NULL
+                                            THEN NOW() ELSE delivered_at END
+                  WHERE id = ?'
+            )->execute(['cancelled', 'cancelled', $id]);
             log_order_event($id, 'admin', (int)$admin['id'], (string)$admin['username'], 'cancelled', [
                 'from' => $order['status'], 'via' => 'customer_request',
             ]);
@@ -659,7 +665,13 @@ function route($method, $action, $parts): void
         if (!$order) {
             Response::error('Order not found.', 404);
         }
-        db()->prepare('UPDATE orders SET status = ? WHERE id = ?')->execute([$status, $id]);
+        db()->prepare(
+            'UPDATE orders
+                SET status = ?,
+                    delivered_at = CASE WHEN ? = \'delivered\' AND delivered_at IS NULL
+                                        THEN NOW() ELSE delivered_at END
+              WHERE id = ?'
+        )->execute([$status, $status, $id]);
         log_order_event($id, 'admin', (int)$admin['id'], (string)$admin['username'],
             $status === 'cancelled' ? 'cancelled' : 'status',
             ['from' => $order['status'], 'to' => $status]);
