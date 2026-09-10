@@ -8,6 +8,7 @@
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/review_tokens.php';
+require_once __DIR__ . '/settings.php';
 
 /** Minutes after a delivery is MARKED before we ask. */
 const REVIEW_DELAY_DELIVERED_MIN = 30;
@@ -137,4 +138,74 @@ function review_submit(int $orderId, int $stars, ?string $comment, array $items,
 
     review_tokens_burn($orderId);
     return $reviewId;
+}
+
+/** How many times we try to push before giving up on an order. */
+const REVIEW_PROMPT_MAX_ATTEMPTS = 3;
+
+/**
+ * Orders that are due for a prompt right now.
+ *
+ * SQL narrows; review_due_at() decides. The due-time comparison is deliberately
+ * NOT in SQL: it is the one rule with real edge cases, and having it in a pure
+ * PHP function is what lets verify-review-due.php check it exhaustively.
+ * The SQL below is only the cheap filter that keeps the row count small.
+ */
+function review_prompt_candidates(int $limit = 50): array
+{
+    $since = setting('reviews_since', '1970-01-01 00:00:00');
+
+    $stmt = db()->prepare(
+        'SELECT o.id, o.customer_id, o.status, o.delivered_at, o.needed_at, o.created_at
+           FROM orders o
+           LEFT JOIN order_reviews  r ON r.order_id = o.id
+           LEFT JOIN review_prompts p ON p.order_id = o.id
+          WHERE o.created_at >= ?
+            AND o.customer_id IS NOT NULL
+            AND o.status IN (\'confirmed\', \'preparing\', \'out_for_delivery\', \'delivered\')
+            AND r.id IS NULL
+            AND (p.order_id IS NULL OR (p.sent_at IS NULL AND p.attempts < ?))
+          ORDER BY o.id
+          LIMIT ' . (int)($limit * 4)
+    );
+    $stmt->execute([$since, REVIEW_PROMPT_MAX_ATTEMPTS]);
+
+    $now = new DateTimeImmutable();
+    $due = [];
+    foreach ($stmt->fetchAll() as $order) {
+        $dueAt = review_due_at($order);
+        if ($dueAt !== null && new DateTimeImmutable($dueAt) <= $now) {
+            $due[] = $order;
+            if (count($due) >= $limit) {
+                break;
+            }
+        }
+    }
+    return $due;
+}
+
+/**
+ * Record the outcome of a prompt attempt.
+ *
+ * due_at is rewritten every pass on purpose. A row can be created by the manual
+ * rating-link endpoint before delivery, when the computed value is the
+ * 60-minute fallback; once delivery is marked the right answer becomes
+ * delivered_at + 30. The stored column is a cache for display, never the truth.
+ */
+function review_prompt_record(int $orderId, string $dueAt, bool $sent, ?string $error): void
+{
+    db()->prepare(
+        'INSERT INTO review_prompts (order_id, due_at, sent_at, attempts, last_error)
+         VALUES (?, ?, ?, 1, ?)
+         ON DUPLICATE KEY UPDATE
+            due_at     = VALUES(due_at),
+            sent_at    = COALESCE(review_prompts.sent_at, VALUES(sent_at)),
+            attempts   = review_prompts.attempts + 1,
+            last_error = VALUES(last_error)'
+    )->execute([
+        $orderId,
+        $dueAt,
+        $sent ? (new DateTime())->format('Y-m-d H:i:s') : null,
+        $error === null ? null : mb_substr($error, 0, 190),
+    ]);
 }
