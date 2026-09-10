@@ -48,13 +48,16 @@ try {
 
         try {
             $token = review_token_issue($orderId);
-            $result = push_send_to_customer(
+            /* POSITIONAL [sent, failed] — there is no 'sent' key. Reading one
+               would be silently 0 forever: every delivered push recorded as a
+               failure, and the order going quiet after three attempts. */
+            [$pushSent] = push_send_to_customer(
                 (int)$order['customer_id'],
                 'How was your meal?',
                 'Tap to rate your order — it takes a few seconds.',
                 '/rate/' . $token
             );
-            $ok = ($result[0] ?? 0) > 0;
+            $ok = $pushSent > 0;
             review_prompt_record($orderId, $dueAt, $ok, $ok ? null : 'no delivery target');
             $ok ? $sent++ : $failed++;
             say(sprintf('  order #%d: %s', $orderId, $ok ? 'sent' : 'no delivery target'));
