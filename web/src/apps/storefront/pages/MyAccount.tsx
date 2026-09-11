@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Package, MapPin, Bell, BellOff, BellRing, User } from 'lucide-react';
+import { Plus, Package, MapPin, Bell, BellOff, BellRing, User, LogOut } from 'lucide-react';
 import { ordersApi, addressesApi } from '../../shared/api/endpoints';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { useAuth } from '../../shared/hooks/useAuth';
@@ -29,7 +29,7 @@ function ErrorBox({ msg }: { msg: string }) {
 }
 
 export function MyAccount() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const toast = useToast();
   const orders = useFetch(() => ordersApi.list(), []);
   const addresses = useFetch(() => addressesApi.list(), []);
@@ -144,6 +144,16 @@ export function MyAccount() {
           <section className="space-y-5">
             <PushStatusCard />
             <PinSetup />
+            {/* The only sign-out reachable on a phone: the header's is in the
+                desktop nav, hidden below the sm breakpoint. Matters on the app
+                and on any shared phone. */}
+            <div className="card-soft p-4">
+              <p className="text-sm font-semibold text-brand-900">Signed in as {displayPhone(user?.phone ?? '')}</p>
+              <p className="mt-1 text-xs text-brand-500">Sign out if this is a shared phone, or to use another number.</p>
+              <Button variant="outline" className="mt-3" onClick={() => void logout()}>
+                <LogOut className="h-4 w-4" /> Sign out
+              </Button>
+            </div>
           </section>
         )}
       </div>
