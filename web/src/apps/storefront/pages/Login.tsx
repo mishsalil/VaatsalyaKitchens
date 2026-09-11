@@ -87,8 +87,8 @@ export function Login() {
 
         <p className="mt-6 text-center text-sm text-brand-600">
           No PIN yet?{' '}
-          <Link to="/order" className="link-quiet font-medium">Place an order first</Link>
-          {' '}— you can set a PIN afterwards.
+          <Link to="/order" className="link-quiet font-medium">Place an order</Link>
+          {' '}and set one afterwards — or, if you ordered at the counter, ask us for your account link.
         </p>
 
         <div className="mt-6">

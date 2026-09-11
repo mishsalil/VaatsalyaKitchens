@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { Loader2, ShieldX, Check } from 'lucide-react';
 import { api } from '../../shared/api/client';
 import { groupRateLines, type RateOrderItem } from '../../shared/lib/rateLines';
@@ -33,6 +33,9 @@ export function Rate() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  /* Set only when the server hands back a claim link — i.e. this customer has
+     never set a PIN. Existing accounts get a plain thank-you. */
+  const [claimToken, setClaimToken] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,7 +61,12 @@ export function Rate() {
         const s = dishStars[line.key];
         return s ? line.orderItemIds.map((id) => ({ order_item_id: id, stars: s })) : [];
       });
-      await api.post(`reviews/${token}`, { stars, comment: comment.trim() || undefined, items });
+      const res: { claim_token?: string | null } = await api.post(`reviews/${token}`, {
+        stars,
+        comment: comment.trim() || undefined,
+        items,
+      });
+      setClaimToken(res.claim_token ?? null);
       setDone(true);
     } catch (e) {
       setSaveError((e as Error).message);
@@ -89,6 +97,15 @@ export function Rate() {
         <p className="mx-auto mt-2 max-w-sm text-sm text-brand-600">
           Your feedback goes straight to our kitchen.
         </p>
+        {claimToken && (
+          <div className="mx-auto mt-8 max-w-sm rounded-2xl border border-cream-200 bg-white p-5 text-left shadow-card">
+            <p className="text-sm font-semibold text-brand-900">Want to track and reorder next time?</p>
+            <p className="mt-1 text-sm text-brand-600">Set a 4-digit PIN and this phone will remember you.</p>
+            <Link to={`/claim/${claimToken}`} className="mt-4 block">
+              <Button fullWidth>Set up my PIN</Button>
+            </Link>
+          </div>
+        )}
       </div>
     );
   }

@@ -27,6 +27,8 @@ export function CustomerDrawer({ customerId, onClose, onChanged }: Props) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+  /** The PIN just set by a reset, kept on screen until the drawer changes customer. */
+  const [resetPinResult, setResetPinResult] = useState<string | null>(null);
 
   const [addrModal, setAddrModal] = useState<{ address?: AdminAddress } | null>(null);
   const [confirm, setConfirm] = useState<{ kind: 'customer' | 'address'; id: number; name: string } | null>(null);
@@ -46,6 +48,7 @@ export function CustomerDrawer({ customerId, onClose, onChanged }: Props) {
   }, [customerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    setResetPinResult(null); // never show one customer's PIN over another's drawer
     if (customerId == null) {
       setDetail(null);
       return;
@@ -71,8 +74,11 @@ export function CustomerDrawer({ customerId, onClose, onChanged }: Props) {
   const resetPin = async () => {
     if (!detail) return;
     try {
-      await adminCustomersApi.resetPin(detail.customer.id);
-      toast.success('PIN reset — customer can set a new one');
+      const res = await adminCustomersApi.resetPin(detail.customer.id);
+      /* Shown inline, not only in the toast: the rep reads this out to the
+         customer, and a toast is gone in four seconds. */
+      setResetPinResult(res.pin);
+      toast.success('PIN reset — all their devices are signed out');
       load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -146,6 +152,11 @@ export function CustomerDrawer({ customerId, onClose, onChanged }: Props) {
                 <Button size="sm" variant="outline" onClick={resetPin}>
                   <KeyRound className="h-3.5 w-3.5" /> Reset PIN
                 </Button>
+                {resetPinResult && (
+                  <span className="rounded-lg bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+                    New PIN: <span className="font-mono text-sm tracking-widest">{resetPinResult}</span> — last 4 of their number
+                  </span>
+                )}
                 <span className="text-xs text-brand-400">
                   {detail.customer.has_pin ? 'PIN set' : 'no PIN'} · {detail.customer.orders_count} order{detail.customer.orders_count === 1 ? '' : 's'}
                 </span>

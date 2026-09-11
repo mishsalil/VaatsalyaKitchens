@@ -37,7 +37,7 @@ function route($method, $action, $parts): void
 
         record_attempt('pin:' . $phone);
         if ($customer && !$customer['pin_hash']) {
-            Response::error('This number has no PIN yet. Just place an order — this device will remember you, and you can set a PIN afterwards.');
+            Response::error('This number has no PIN yet. Place an order and this device will remember you — or if you ordered at the counter, ask us for your account link.');
         }
         Response::error('That phone number and PIN do not match. Please try again.', 401);
     }

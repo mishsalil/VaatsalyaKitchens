@@ -109,6 +109,32 @@ review_submit($orderH, 5, $raw, [], 'link');
 check('stored byte-for-byte', $pdo->query(
     "SELECT comment FROM order_reviews WHERE order_id = $orderH")->fetchColumn() === $raw);
 
+echo "\na completed rating hands a claim link ONLY to a customer with no PIN\n";
+/* $custId has no pin_hash — it was inserted with none. */
+[$orderI, , ] = makeOrder($pdo, $custId);
+review_submit($orderI, 5, null, [], 'link');
+$claim = review_claim_token_after($orderI);
+check('pin-less customer gets a claim token', is_string($claim) && str_contains($claim, '.'));
+check('the claim token resolves to that customer', consume_claim_token($claim) === $custId);
+check('and is single use', consume_claim_token($claim) === null);
+
+$pdo->exec("INSERT INTO customers (name, phone, pin_hash) VALUES ('Has Pin', '9999900004', '" . password_hash('1234', PASSWORD_DEFAULT) . "')");
+$pinnedId = (int)$pdo->lastInsertId();
+[$orderJ, , ] = makeOrder($pdo, $pinnedId);
+review_submit($orderJ, 5, null, [], 'link');
+check('customer WITH a PIN gets nothing', review_claim_token_after($orderJ) === null);
+
+echo "\nPIN reset: last four of the phone, and every session revoked\n";
+$pdo->exec("INSERT INTO auth_tokens (subject_type, subject_id, selector, validator_hash, expires_at)
+            VALUES ('customer', $pinnedId, 'aaaaaaaaaaaaaaaaaaaaaaaa', REPEAT('b', 64), DATE_ADD(NOW(), INTERVAL 1 DAY))");
+$newPin = reset_customer_pin($pinnedId);
+check('new PIN is the last four digits of 9999900004', $newPin === '0004');
+$hash = $pdo->query("SELECT pin_hash FROM customers WHERE id = $pinnedId")->fetchColumn();
+check('the stored hash verifies against that PIN', password_verify('0004', $hash));
+check('the old PIN no longer works', !password_verify('1234', $hash));
+check('every session for that customer is revoked',
+    (int)$pdo->query("SELECT COUNT(*) FROM auth_tokens WHERE subject_type = 'customer' AND subject_id = $pinnedId")->fetchColumn() === 0);
+
 $pdo->exec("DROP DATABASE IF EXISTS `$db`");
 echo "\n$pass passed, $fail failed\n";
 exit($fail === 0 ? 0 : 1);

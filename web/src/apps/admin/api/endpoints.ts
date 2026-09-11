@@ -172,7 +172,7 @@ export const adminCustomersApi = {
   list: (q?: string) => adminApi.get('customers' + (q ? `?q=${encodeURIComponent(q)}` : '')) as Promise<{ customers: AdminCustomer[] }>,
   show: (id: number) => adminApi.get(`customers/show/${id}`) as Promise<AdminCustomerDetail>,
   update: (id: number, data: { name: string; phone: string }) => adminApi.post(`customers/update/${id}`, data),
-  resetPin: (id: number) => adminApi.post(`customers/reset_pin/${id}`, {}),
+  resetPin: (id: number) => adminApi.post(`customers/reset_pin/${id}`, {}) as Promise<{ pin: string }>,
   delete: (id: number) => adminApi.post(`customers/delete/${id}`, {}),
   export: () => adminApi.csvGet('customers/export'),
   import: (file: File) => {

@@ -120,6 +120,18 @@ function review_route_post(int $orderId): void
         Response::error($e->getMessage(), $alreadyRated ? 409 : 400);
     }
 
+    /* A counter customer has no PIN and no session, and the login page's advice
+       ("place an order first") is a dead end for someone who has already ordered
+       at the counter. The rating link is the one thing we KNOW reached them, so
+       a completed rating — token burned, order proven theirs — is treated as
+       enough to hand over a claim link, exactly the one the counter would
+       otherwise WhatsApp by hand: single use, seven days, same trust model.
+
+       Only for customers who have never set a PIN. An account that already
+       works gets nothing extra to leak. The review token itself still grants
+       nothing but the rating; this is issued AFTER it has been consumed. */
+    $claimToken = review_claim_token_after($orderId);
+
     if ($stars <= 2) {
         /* Deliberately the DEFAULT channel. vk_urgent and OrderAlarmService
            ring at full volume through silent mode, which is right for an order
@@ -131,5 +143,5 @@ function review_route_post(int $orderId): void
         );
     }
 
-    Response::success('Thank you for the feedback');
+    Response::success('Thank you for the feedback', ['claim_token' => $claimToken]);
 }

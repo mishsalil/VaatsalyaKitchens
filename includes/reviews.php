@@ -9,6 +9,7 @@
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/review_tokens.php';
 require_once __DIR__ . '/settings.php';
+require_once __DIR__ . '/auth.php';   // issue_claim_token()
 
 /** Minutes after a delivery is MARKED before we ask. */
 const REVIEW_DELAY_DELIVERED_MIN = 30;
@@ -149,6 +150,30 @@ function review_due_order_for_customer(int $orderId, int $customerId): ?array
 
 /** Longest comment we store. Beyond this it is not feedback, it is a payload. */
 const REVIEW_COMMENT_MAX = 1000;
+
+/**
+ * After a completed rating, a claim link for a customer who has never set a PIN.
+ *
+ * A counter customer has no PIN and no session, and the login page's advice
+ * ("place an order first") is a dead end for someone who has already ordered at
+ * the counter. The rating link is the one thing we KNOW reached them, so a
+ * completed rating — token burned, order proven theirs — is treated as enough
+ * to hand over exactly the claim link the counter would otherwise WhatsApp by
+ * hand: single use, seven days, same trust model.
+ *
+ * Null for a customer who already has a PIN. An account that already works
+ * gets nothing extra to leak. Call this AFTER review_submit() has succeeded.
+ */
+function review_claim_token_after(int $orderId): ?string
+{
+    $stmt = db()->prepare(
+        'SELECT c.id FROM orders o JOIN customers c ON c.id = o.customer_id
+          WHERE o.id = ? AND c.pin_hash IS NULL'
+    );
+    $stmt->execute([$orderId]);
+    $customerId = $stmt->fetchColumn();
+    return $customerId === false ? null : issue_claim_token((int)$customerId);
+}
 
 /**
  * Write a review. Throws InvalidArgumentException on any refusal, and writes

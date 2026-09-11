@@ -88,6 +88,37 @@ function consume_claim_token(string $token): ?int
 }
 
 /**
+ * Reset a customer's PIN to the last four digits of their phone number, and
+ * sign them out everywhere. Returns the new PIN so the rep can read it out.
+ *
+ * A KNOWN pin, not NULL: clearing it left the customer unable to sign in at
+ * all until their next order, which is the exact dead end a reset is meant to
+ * get them out of. Every session is revoked at the same time, because a reset
+ * is what happens when a phone is lost or a PIN forgotten, and leaving old
+ * devices signed in would hand whoever holds the lost phone a session the
+ * reset was supposed to cut off.
+ *
+ * Throws InvalidArgumentException when the phone cannot yield four digits.
+ */
+function reset_customer_pin(int $customerId): string
+{
+    $stmt = db()->prepare('SELECT phone FROM customers WHERE id = ?');
+    $stmt->execute([$customerId]);
+    $phone = $stmt->fetchColumn();
+    if ($phone === false) {
+        throw new InvalidArgumentException('Customer not found.');
+    }
+    $pin = substr((string)$phone, -4);
+    if (!preg_match('/^\d{4}$/', $pin)) {
+        throw new InvalidArgumentException('This customer has no usable phone number to derive a PIN from.');
+    }
+    db()->prepare('UPDATE customers SET pin_hash = ? WHERE id = ?')
+        ->execute([password_hash($pin, PASSWORD_DEFAULT), $customerId]);
+    auth_token_revoke_all('customer', $customerId);
+    return $pin;
+}
+
+/**
  * Auto-registration: create or update the customer record from order details.
  * Returns the customer id.
  */

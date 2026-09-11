@@ -163,13 +163,19 @@ function route($method, $action, $parts): void
         Response::success('Updated');
     }
 
+    /* Resets to the last four digits of the phone (not NULL) and signs the
+       customer out everywhere — see reset_customer_pin() for why both. */
     if ($action === 'reset_pin') {
         $id = (int)($parts[3] ?? 0);
         if (!load_customer($id)) {
             Response::error('Customer not found.', 404);
         }
-        $db->prepare('UPDATE customers SET pin_hash = NULL WHERE id = ?')->execute([$id]);
-        Response::success('PIN reset');
+        try {
+            $pin = reset_customer_pin($id);
+        } catch (InvalidArgumentException $e) {
+            Response::error($e->getMessage());
+        }
+        Response::success('PIN reset', ['pin' => $pin]);
     }
 
     if ($action === 'delete') {
