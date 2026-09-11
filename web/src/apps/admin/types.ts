@@ -198,6 +198,8 @@ export interface AdminSettingsFull {
   print_footer: string;
   /** Tax-exclusive GST rate (percent), split equally SGST/CGST. 0 disables GST. */
   gst_rate: string;
+  /** Google Maps JavaScript API key for the customer's address picker. Blank = plain textarea. */
+  google_maps_key: string;
 }
 
 export interface AdminSettingsResponse {

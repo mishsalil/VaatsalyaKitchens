@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, MessageCircle, MapPin, Clock, Tag, StickyNote, Pencil, History, Copy, Check } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, Clock, Tag, StickyNote, Pencil, History, Copy, Check, Navigation } from 'lucide-react';
+import { directionsUrl } from '../../shared/lib/mapsLink';
 import { Sheet } from '../../shared/components/ui/Sheet';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { Skeleton } from '../../shared/components/Skeleton';
@@ -201,7 +202,16 @@ export function OrderDrawer({ orderId, onClose, onChanged }: Props) {
               <>
                 <p className="text-sm text-brand-800">{order.address_text}</p>
                 {order.lat != null && order.lng != null && (
-                  <a href={`https://www.google.com/maps?q=${order.lat},${order.lng}`} target="_blank" rel="noopener" className="mt-1 inline-block text-xs font-semibold text-brand-600 hover:underline">Open in Maps →</a>
+                  /* Turn-by-turn to the pin — the reason the pin exists. Opens
+                     the Maps app on a phone, the web on a desktop. */
+                  <a
+                    href={directionsUrl(order.lat, order.lng)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-brand-900 px-3 py-1.5 text-xs font-semibold text-cream-50 hover:bg-brand-800"
+                  >
+                    <Navigation className="h-3.5 w-3.5" /> Navigate
+                  </a>
                 )}
               </>
             ) : (

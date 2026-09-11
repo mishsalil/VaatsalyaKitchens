@@ -13,6 +13,7 @@ import { Button } from '../../shared/components/ui/Button';
 import { CustomerSuggest } from '../components/CustomerSuggest';
 import { usePaperSetting } from '../hooks/usePaperSetting';
 import { publicUrl } from '../../shared/lib/baseUrl';
+import { parseMapsLink, isShortMapsLink, directionsUrl } from '../../shared/lib/mapsLink';
 import { usePrinterSetting } from '../hooks/usePrinterSetting';
 import { printBlocks, printerSupported, PRINTER_SETTLE_MS } from '../../shared/print/thermalPrinter';
 import { documentsFor } from '../components/PrinterBar';
@@ -76,6 +77,12 @@ export function AdminNewOrder() {
   // rather than forcing the rep to re-pick a time that is already correct.
   const [whenText, setWhenText] = useState('');
   const [address, setAddress] = useState('');
+  /* The pin, when the customer sent a Google Maps link on WhatsApp and the
+     rep pasted it. The text address stays a label; this is what the rider
+     navigates to. */
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapsPaste, setMapsPaste] = useState('');
+  const [mapsMsg, setMapsMsg] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [known, setKnown] = useState<string | null>(null);
 
@@ -213,6 +220,9 @@ export function AdminNewOrder() {
         setPhone(order.phone);
         setWhenText(order.needed_on);
         setAddress(order.address_text ?? '');
+        setCoords(order.lat != null && order.lng != null ? { lat: order.lat, lng: order.lng } : null);
+        setMapsPaste('');
+        setMapsMsg(order.lat != null && order.lng != null ? 'Pin already on this order' : null);
         setNotes(order.notes ?? '');
         setDiscountPct(order.discount_pct ? String(order.discount_pct) : '');
         setDeliveryCharge(order.delivery_charge ? String(order.delivery_charge) : '');
@@ -293,6 +303,35 @@ export function AdminNewOrder() {
   /** Fill the whole customer block from one picked suggestion. Address is only
       taken when the field is still empty, so a rep who already typed a
       different delivery address for this order does not lose it. */
+  /* The customer sends a Google Maps link on WhatsApp; the rep pastes it. A
+     full link parses locally. A maps.app.goo.gl short link hides the pair
+     behind a redirect, so the server follows it and hands back the full URL. */
+  const applyMapsPaste = async (text: string) => {
+    setMapsPaste(text);
+    setMapsMsg(null);
+    const direct = parseMapsLink(text);
+    if (direct) {
+      setCoords(direct);
+      setMapsMsg(`Pin set: ${direct.lat.toFixed(5)}, ${direct.lng.toFixed(5)}`);
+      return;
+    }
+    if (!isShortMapsLink(text)) {
+      setCoords(null);
+      if (text.trim()) setMapsMsg('Not a maps link or coordinates');
+      return;
+    }
+    try {
+      const { url } = await adminOrdersApi.expandMapLink(text.trim());
+      const p = parseMapsLink(url);
+      if (!p) throw new Error('Could not read coordinates from that link');
+      setCoords(p);
+      setMapsMsg(`Pin set: ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`);
+    } catch (e) {
+      setCoords(null);
+      setMapsMsg((e as Error).message);
+    }
+  };
+
   const applyCustomer = (c: { name: string; phone: string; address_text: string | null }) => {
     setName(c.name);
     setPhone(c.phone);
@@ -361,6 +400,7 @@ export function AdminNewOrder() {
     // Recomputed, not blanked — the next order gets a fresh 40-minutes-from-now,
     // not a stale one from whenever this screen first loaded.
     setPhone(''); setName(''); setWhenLocal(defaultNeededOnLocal()); setAddress(''); setNotes('');
+    setCoords(null); setMapsPaste(''); setMapsMsg(null);
     setKnown(null); setCart({}); setQuery('');
     setDiscountPct(''); setDeliveryCharge(''); setComplimentary(false);
     setError(null); setPlaced(null); setClaimNote(null);
@@ -455,6 +495,8 @@ export function AdminNewOrder() {
       phone: normalizePhone(phone) as string,
       needed_on: neededOn,
       address_text: address.trim(),
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
       notes: notes.trim(),
       items,
       discount_pct: Number(discountPct) || 0,
@@ -583,6 +625,28 @@ export function AdminNewOrder() {
         <label className="block">
           <span className="text-xs font-semibold text-brand-600">Address (blank = pickup)</span>
           <input value={address} onChange={(e) => setAddress(e.target.value)} className={`mt-1 ${inputClass}`} />
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold text-brand-600">Maps link from customer (optional)</span>
+          <input
+            value={mapsPaste}
+            onChange={(e) => void applyMapsPaste(e.target.value)}
+            placeholder="Paste a Google Maps link or lat, lng"
+            className={`mt-1 ${inputClass}`}
+          />
+          {mapsMsg && (
+            <span className={`mt-1 block text-xs ${coords ? 'text-green-700' : 'text-red-600'}`}>
+              {mapsMsg}
+              {coords && (
+                <>
+                  {' · '}
+                  <a href={directionsUrl(coords.lat, coords.lng)} target="_blank" rel="noopener noreferrer" className="underline">
+                    check on map
+                  </a>
+                </>
+              )}
+            </span>
+          )}
         </label>
         <label className="block sm:col-span-2 lg:col-span-4">
           <span className="text-xs font-semibold text-brand-600">Notes</span>

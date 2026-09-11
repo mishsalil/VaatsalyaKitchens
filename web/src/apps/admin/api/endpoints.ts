@@ -102,6 +102,8 @@ export const adminOrdersApi = {
       token: string; phone: string; name: string; has_pin: boolean; days: number;
     }>,
   /** Mint a fresh rating-link token for manual sending (WhatsApp, by hand). */
+  /** Resolve a maps.app.goo.gl short link to the full URL the client can parse. */
+  expandMapLink: (url: string) => adminApi.post('orders/expand_map_link', { url }) as Promise<{ url: string }>,
   ratingLink: (orderId: number) =>
     adminApi.post(`orders/rating_link/${orderId}`, {}) as Promise<{ token: string; days: number }>,
 };

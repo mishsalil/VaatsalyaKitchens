@@ -47,6 +47,7 @@ export function AdminSettings() {
         gstin: form.gstin,
         print_footer: form.print_footer,
         gst_rate: form.gst_rate,
+        google_maps_key: form.google_maps_key ?? '',
       });
       setForm(res.settings);
       toast.success('Settings saved — storefront updated');
@@ -137,6 +138,9 @@ export function AdminSettings() {
           </Field>
           <Field label="GSTIN" htmlFor="k-gstin" hint="optional">
             <Input id="k-gstin" value={form.gstin} onChange={(e) => set('gstin', e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" maxLength={15} />
+          </Field>
+          <Field label="Google Maps API key" htmlFor="k-maps" hint="for the customer's address picker — blank keeps the plain address box">
+            <Input id="k-maps" value={form.google_maps_key ?? ''} onChange={(e) => set('google_maps_key', e.target.value.trim())} placeholder="AIza…" autoComplete="off" />
           </Field>
           <Field label="Receipt footer note" htmlFor="k-footer" hint="optional" className="sm:col-span-2">
             <Input id="k-footer" value={form.print_footer} onChange={(e) => set('print_footer', e.target.value)} />
