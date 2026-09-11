@@ -226,13 +226,31 @@ function save_uploaded_logo(): string
         $h = imagesy($img);
         $scale = min(1, LOGO_MAX_PX / max($w, $h));
         if ($scale < 1) {
-            $resized = imagescale($img, (int)round($w * $scale), (int)round($h * $scale), IMG_BICUBIC);
-            imagedestroy($img);
+            /* imagecopyresampled rather than imagescale: the first version used
+               imagescale(..., IMG_BICUBIC), which returned false on the host's
+               GD build — not every build supports that mode — and the upload
+               died with "Could not resize the logo". imagecopyresampled has
+               been in GD forever. The destination is set up for alpha before
+               copying, or a transparent logo comes out on black. */
+            $nw = max(1, (int)round($w * $scale));
+            $nh = max(1, (int)round($h * $scale));
+            $resized = imagecreatetruecolor($nw, $nh);
             if ($resized === false) {
-                Response::error('Could not resize the logo.', 500);
+                imagedestroy($img);
+                Response::error(sprintf('Could not resize the logo (%dx%d, GD %s).', $w, $h, gd_info()['GD Version'] ?? '?'), 500);
             }
+            imagealphablending($resized, false);
+            imagesavealpha($resized, true);
+            imagefill($resized, 0, 0, imagecolorallocatealpha($resized, 0, 0, 0, 127));
+            if (!imagecopyresampled($resized, $img, 0, 0, 0, 0, $nw, $nh, $w, $h)) {
+                imagedestroy($img);
+                imagedestroy($resized);
+                Response::error(sprintf('Could not resize the logo (%dx%d, GD %s).', $w, $h, gd_info()['GD Version'] ?? '?'), 500);
+            }
+            imagedestroy($img);
             $img = $resized;
         }
+        imagealphablending($img, false);
         imagesavealpha($img, true);
         $ext = 'png';
     } elseif ($ext !== 'svg' && ($size[0] > 2000 || $size[1] > 2000)) {
@@ -247,7 +265,7 @@ function save_uploaded_logo(): string
         }
     }
     $dest = "$dir/logo.$ext";
-    $saved = $gd ? imagepng($img, $dest, 6) : move_uploaded_file($f['tmp_name'], $dest);
+    $saved = $gd ? imagepng($img, $dest, 9) : move_uploaded_file($f['tmp_name'], $dest);
     if ($gd) {
         imagedestroy($img);
     }
