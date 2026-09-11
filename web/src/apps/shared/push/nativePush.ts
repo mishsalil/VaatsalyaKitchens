@@ -111,7 +111,22 @@ export function attachNativePushHandlers(): void {
   PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
     const url = (action.notification?.data as Record<string, unknown> | undefined)?.url;
     if (typeof url === 'string' && url.startsWith('/')) {
-      window.location.assign(url);
+      navigateInApp(url);
     }
   });
+}
+
+/**
+ * Navigate the SPA without a page load.
+ *
+ * window.location.assign() reloads through Capacitor's local server, which
+ * treats a path whose last segment contains a dot as a FILE request. A rating
+ * link is /rate/<selector>.<validator>, so the tap on "How was your meal?"
+ * landed on the WebView's "Web page not available" screen. React Router
+ * listens for popstate, so pushing the URL and firing one routes in place —
+ * no reload, no file server, and the customer's session stays mounted.
+ */
+export function navigateInApp(path: string): void {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
 }
