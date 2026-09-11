@@ -27,9 +27,14 @@ const NAV: NavItem[] = [
 ];
 
 function Wordmark() {
+  /* The uploaded logo, same as the storefront; the favicon only until one
+     has been uploaded. It rides along with the receipt letterhead, which is
+     the one settings block every admin role can read. */
+  const { settings } = useAdminAuth();
+  const logo = settings?.print_header.logo_path;
   return (
     <div className="flex items-center gap-2.5 px-1">
-      <img src="/favicon.svg" alt="Vaatsalya Kitchens logo" className="h-8 w-8" />
+      <img src={logo ?? '/favicon.svg'} alt="Vaatsalya Kitchens logo" className="h-10 w-10 rounded-full object-cover" />
       <span className="flex flex-col leading-none">
         <span className="font-serif text-lg font-bold text-brand-900">
           <span className="font-devanagari" lang="hi">वात्सल्य</span>{' '}

@@ -4,12 +4,21 @@ import { Home as HomeIcon, UtensilsCrossed, User, LogIn, Phone, MapPin } from 'l
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useCart } from '../../shared/context/CartContext';
 
-function Wordmark() {
+/** The logo alone — it sits in the header's centre column. */
+function Logo() {
   const { settings } = useAuth();
   const logo = settings?.logo_path;
   return (
-    <Link to="/" className="flex items-center gap-3">
-      <img src={logo ?? '/favicon.svg'} alt="Vaatsalya Kitchens logo" className="h-12 w-12 rounded-full object-cover sm:h-14 sm:w-14" />
+    <Link to="/" className="flex items-center">
+      <img src={logo ?? '/favicon.svg'} alt="Vaatsalya Kitchens logo" className="h-14 w-14 rounded-full object-cover sm:h-[4.5rem] sm:w-[4.5rem]" />
+    </Link>
+  );
+}
+
+/** The name, on the left as it always was. */
+function Wordmark() {
+  return (
+    <Link to="/" className="flex items-center">
       <span className="flex flex-col leading-none">
         <span className="font-serif text-2xl font-bold text-brand-900">
           <span className="font-devanagari" lang="hi">वात्सल्य</span>{' '}
@@ -92,12 +101,13 @@ export function CustomerLayout() {
     <div className="flex min-h-dvh flex-col bg-cream-100">
       {/* Clean white sticky app bar */}
       <header className="sticky top-0 z-40 border-b border-cream-200 bg-white/95 pt-safe backdrop-blur">
-        {/* Centred wordmark at every size. On mobile the nav is the bottom bar, so
-            the header is the wordmark alone; on desktop a three-column grid keeps
-            it dead centre while the nav sits in the right column. */}
-        <div className="container-wide flex h-16 items-center justify-center sm:grid sm:h-20 sm:grid-cols-[1fr_auto_1fr]">
-          <div className="hidden sm:block" />
+        {/* Three columns at every size: the name on the left, the logo dead
+            centre, the nav on the right (empty on mobile, where the nav is the
+            bottom bar). The outer columns are equal so the logo stays centred
+            however wide the name or the nav happens to be. */}
+        <div className="container-wide grid h-[4.5rem] grid-cols-[1fr_auto_1fr] items-center sm:h-24">
           <Wordmark />
+          <Logo />
           <div className="flex justify-end">
             <DesktopNav />
           </div>
