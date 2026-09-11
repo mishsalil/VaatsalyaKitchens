@@ -167,8 +167,11 @@ export function Checkout() {
       </div>
 
       <div className="mt-6 grid gap-6 sm:grid-cols-[1fr_22rem] sm:items-start">
-        {/* Left: details form */}
-        <form className="space-y-5" onSubmit={placeOrder}>
+        {/* Left: details form. min-w-0 matters: a 1fr grid column defaults to
+            min-width:auto, so the map picker's autocomplete element — a web
+            component with an intrinsic width — stretched the column and put a
+            horizontal scrollbar on the whole page. */}
+        <form className="min-w-0 space-y-5" onSubmit={placeOrder}>
           {formError && <FormError message={formError} />}
 
           {/* Contact */}

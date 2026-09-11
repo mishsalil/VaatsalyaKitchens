@@ -132,8 +132,10 @@ export function MapPinPicker({ value, onChange }: { value: AddressDraft; onChang
     onChange({ ...value, [k]: e.target.value });
 
   return (
-    <div className="space-y-3">
-      <div ref={searchEl} className="[&>gmp-place-autocomplete]:w-full" />
+    <div className="min-w-0 max-w-full space-y-3">
+      {/* The autocomplete is a web component with its own idea of width; the
+          wrapper clips it and index.css forces the element to block/100%. */}
+      <div ref={searchEl} className="w-full max-w-full overflow-hidden" />
       <div className="relative overflow-hidden rounded-xl border border-cream-200">
         <div ref={mapEl} className="h-56 w-full bg-cream-100 sm:h-64" />
         {!ready && !loadError && (

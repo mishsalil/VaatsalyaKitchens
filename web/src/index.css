@@ -71,3 +71,12 @@
 .pt-safe {
   padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
 }
+/* Google's Places autocomplete is a web component with an intrinsic width.
+   Left alone it widens whatever column it lands in; pinned to its container
+   it behaves like any other input. */
+gmp-place-autocomplete {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
