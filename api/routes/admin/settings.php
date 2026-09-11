@@ -4,7 +4,8 @@
    GET  /api/admin/settings                       → {settings, admin, vapid_configured}
    POST /api/admin/settings/update                {kitchen_name, kitchen_address,
                                                    kitchen_whatsapp, kitchen_phone_display,
-                                                   kitchen_email, gstin, print_footer}
+                                                   kitchen_email, gstin, print_footer,
+                                                   gst_rate, google_maps_key}
    POST /api/admin/settings/upload_logo           (multipart: logo=file) → {logo_path}
    POST /api/admin/settings/change_password       {current, new}
 
@@ -65,6 +66,11 @@ function route($method, $action, $parts): void
         }
         $gstRate = round($gstRate, 2);
 
+        $mapsKey = mb_substr(trim((string)($_POST['google_maps_key'] ?? '')), 0, 120);
+        if ($mapsKey !== '' && !preg_match('/^[A-Za-z0-9_-]+$/', $mapsKey)) {
+            Response::error('That does not look like a Google API key.');
+        }
+
         set_setting('kitchen_name', $name);
         set_setting('kitchen_address', $address);
         set_setting('kitchen_whatsapp', $whatsapp);
@@ -73,6 +79,7 @@ function route($method, $action, $parts): void
         set_setting('gstin', $gstin);
         set_setting('print_footer', $footer);
         set_setting('gst_rate', (string)$gstRate);
+        set_setting('google_maps_key', $mapsKey);
 
         // bust the all_settings() in-process cache so the response is fresh
         Response::json(['ok' => true, 'settings' => all_settings_fresh()]);

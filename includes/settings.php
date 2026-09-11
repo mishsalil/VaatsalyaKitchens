@@ -34,6 +34,13 @@ function settings_defaults(): array
            Bulk and party minimums are not enforced here — those are agreed on
            the phone, not placed through the cart. */
         'min_order_value'      => '199',
+        /* Google Maps JavaScript API key for the customer's address picker.
+           A SETTING, not a build variable: the counter phones run a packaged
+           APK, and baking it in would mean a new APK to rotate it. Blank means
+           the picker falls back to a plain textarea. It is public by design (it
+           runs in the browser); the referrer restriction in Google Cloud is
+           what protects it. */
+        'google_maps_key'      => '',
     ];
 }
 

@@ -33,6 +33,7 @@ function route($method, $action, $parts): void
             'kitchen_phone_display' => $s['kitchen_phone_display'],
             'kitchen_email'         => $s['kitchen_email'],
             'logo_path'             => $s['logo_path'],
+            'google_maps_key'       => (string)($s['google_maps_key'] ?? ''),
             'gst_rate'              => (string)($s['gst_rate'] ?? '0'),
             'min_order_value'       => (string)($s['min_order_value'] ?? '0'),
             'base_url'              => $cfg['base_url'],

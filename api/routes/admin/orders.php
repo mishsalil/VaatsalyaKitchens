@@ -343,6 +343,19 @@ function route($method, $action, $parts): void
        validator only exists at creation, and rotating a stored one would kill
        the link the push already delivered. Many tokens per order is the design
        (see includes/review_tokens.php). */
+    /* --- expand a maps.app.goo.gl short link for the counter's paste field ---
+       The client parses coordinates itself; it only needs the full URL. */
+    if ($action === 'expand_map_link' && $method === 'POST') {
+        require_admin_cap('new_order');
+        require_once __DIR__ . '/../../../includes/maps_link.php';
+        $url = trim((string)($_POST['url'] ?? ''));
+        $full = $url === '' ? null : expand_map_link($url);
+        if ($full === null) {
+            Response::error('Could not read that link. Paste the full Google Maps link, or the coordinates.');
+        }
+        Response::json(['url' => $full]);
+    }
+
     if ($action === 'rating_link' && $method === 'POST') {
         require_admin_cap('reviews');
         $orderId = (int)($parts[3] ?? 0);
@@ -389,6 +402,12 @@ function route($method, $action, $parts): void
         }
         $notes       = mb_substr(trim((string)($_POST['notes'] ?? '')), 0, 2000);
         $addressText = mb_substr(trim((string)($_POST['address_text'] ?? '')), 0, 2000);
+        /* The pin, when the counter pasted a maps link. Both or neither. */
+        $lat = is_numeric($_POST['lat'] ?? null) ? (float)$_POST['lat'] : null;
+        $lng = is_numeric($_POST['lng'] ?? null) ? (float)$_POST['lng'] : null;
+        if (($lat === null) !== ($lng === null) || ($lat !== null && (abs($lat) > 90 || abs($lng) > 180))) {
+            Response::error('Location coordinates are incomplete.');
+        }
 
         // Counter billing adjustments (migration_006). Clamped here as well as
         // in compute_order_total so a bad client can never bill a negative.
@@ -424,18 +443,18 @@ function route($method, $action, $parts): void
                     $isFirst = (int)$countStmt->fetch()['c'] === 0;
                     $pdo->prepare(
                         'INSERT INTO addresses (customer_id, label, address_text, lat, lng, is_default)
-                         VALUES (?, ?, ?, NULL, NULL, ?)'
-                    )->execute([$customerId, $isFirst ? 'Home' : 'Saved address', $addressText, $isFirst ? 1 : 0]);
+                         VALUES (?, ?, ?, ?, ?, ?)'
+                    )->execute([$customerId, $isFirst ? 'Home' : 'Saved address', $addressText, $lat, $lng, $isFirst ? 1 : 0]);
                 }
             }
 
             $pdo->prepare(
-                'INSERT INTO orders (customer_id, name, phone, needed_on, address_text, notes,
+                'INSERT INTO orders (customer_id, name, phone, needed_on, address_text, lat, lng, notes,
                                      total_estimate, subtotal, cgst, sgst, gst_rate,
                                      discount_pct, discount_amount, delivery_charge, is_complimentary,
                                      branch_id, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            )->execute([$customerId, $name, $phone, $neededOn, $addressText ?: null, $notes ?: null,
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            )->execute([$customerId, $name, $phone, $neededOn, $addressText ?: null, $lat, $lng, $notes ?: null,
                         $bill['total'], $bill['subtotal'], $bill['cgst'], $bill['sgst'], $bill['rate'],
                         $bill['discount_pct'], $bill['discount_amount'], $bill['delivery_charge'],
                         $bill['complimentary'] ? 1 : 0,
@@ -502,6 +521,12 @@ function route($method, $action, $parts): void
         }
         $notes       = mb_substr(trim((string)($_POST['notes'] ?? '')), 0, 2000);
         $addressText = mb_substr(trim((string)($_POST['address_text'] ?? '')), 0, 2000);
+        /* The pin, when the counter pasted a maps link. Both or neither. */
+        $lat = is_numeric($_POST['lat'] ?? null) ? (float)$_POST['lat'] : null;
+        $lng = is_numeric($_POST['lng'] ?? null) ? (float)$_POST['lng'] : null;
+        if (($lat === null) !== ($lng === null) || ($lat !== null && (abs($lat) > 90 || abs($lng) > 180))) {
+            Response::error('Location coordinates are incomplete.');
+        }
         $discountPct = min(100.0, max(0.0, (float)($_POST['discount_pct'] ?? 0)));
         $deliveryCharge  = max(0.0, (float)($_POST['delivery_charge'] ?? 0));
         $isComplimentary = !empty($_POST['is_complimentary']);
@@ -519,13 +544,13 @@ function route($method, $action, $parts): void
         $pdo->beginTransaction();
         try {
             $pdo->prepare(
-                'UPDATE orders SET name = ?, phone = ?, needed_on = ?, address_text = ?, notes = ?,
+                'UPDATE orders SET name = ?, phone = ?, needed_on = ?, address_text = ?, lat = ?, lng = ?, notes = ?,
                                    total_estimate = ?, subtotal = ?, cgst = ?, sgst = ?, gst_rate = ?,
                                    discount_pct = ?, discount_amount = ?, delivery_charge = ?,
                                    is_complimentary = ?
                    WHERE id = ?'
             )->execute([
-                $name, $phone, $neededOn, $addressText ?: null, $notes ?: null,
+                $name, $phone, $neededOn, $addressText ?: null, $lat, $lng, $notes ?: null,
                 $bill['total'], $bill['subtotal'], $bill['cgst'], $bill['sgst'], $bill['rate'],
                 $bill['discount_pct'], $bill['discount_amount'], $bill['delivery_charge'],
                 $bill['complimentary'] ? 1 : 0, $id,
