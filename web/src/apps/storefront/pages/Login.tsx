@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
-import { LogIn, Phone, KeyRound } from 'lucide-react';
+import { LogIn, Phone, KeyRound, MessageCircle } from 'lucide-react';
+import { buildAccountLinkRequestUrl } from '../../shared/lib/whatsapp';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useToast } from '../../shared/context/ToastContext';
 import { normalizePhone } from '../../shared/lib/format';
@@ -11,7 +12,7 @@ import { FormError } from '../../shared/components/ui/FormError';
 import { PushNudge } from '../../shared/push/PushNudge';
 
 export function Login() {
-  const { login, user } = useAuth();
+  const { login, user, settings } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -23,6 +24,14 @@ export function Login() {
   const [pinErr, setPinErr] = useState('');
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  /* The way to "ask us": a prefilled WhatsApp message carrying the number the
+     customer typed, so the rep can find their order and copy the claim link
+     without a back-and-forth. Null until settings have loaded. */
+  const waUrl = settings?.kitchen_whatsapp
+    ? buildAccountLinkRequestUrl(settings.kitchen_whatsapp, normalizePhone(phone))
+    : null;
+  const noPinYet = /no PIN yet/i.test(formError);
 
   // Already signed in — no need to stay here.
   if (user) {
@@ -70,6 +79,13 @@ export function Login() {
 
         <form className="mt-6 space-y-4" onSubmit={submit}>
           {formError && <FormError message={formError} />}
+          {noPinYet && waUrl && (
+            <a href={waUrl} target="_blank" rel="noopener noreferrer" className="block">
+              <Button type="button" variant="outline" fullWidth>
+                <MessageCircle className="h-4 w-4" /> Ask for my account link on WhatsApp
+              </Button>
+            </a>
+          )}
           <Field label="Phone number" htmlFor="login-phone" error={phoneErr}>
             <div className="relative">
               <Phone className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-400" />
@@ -88,7 +104,15 @@ export function Login() {
         <p className="mt-6 text-center text-sm text-brand-600">
           No PIN yet?{' '}
           <Link to="/order" className="link-quiet font-medium">Place an order</Link>
-          {' '}and set one afterwards — or, if you ordered at the counter, ask us for your account link.
+          {' '}and set one afterwards — or, if you ordered at the counter,{' '}
+          {waUrl ? (
+            <a href={waUrl} target="_blank" rel="noopener noreferrer" className="link-quiet font-medium">
+              message us on WhatsApp
+            </a>
+          ) : (
+            'message us on WhatsApp'
+          )}
+          {' '}for your account link.
         </p>
 
         <div className="mt-6">

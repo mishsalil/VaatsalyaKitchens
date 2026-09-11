@@ -37,3 +37,17 @@ export function buildWaMeUrl(kitchenWhatsapp: string, order: Order): string {
   if (order.notes) lines.push(`Notes: ${order.notes}`);
   return `https://wa.me/${kitchenWhatsapp}?text=${encodeURIComponent(lines.join('\n'))}`;
 }
+
+/**
+ * A counter customer asking for their account (claim) link.
+ *
+ * The login page used to say "ask us for your account link" with no way to
+ * ask. This is the way: a WhatsApp message to the kitchen, carrying the number
+ * the customer typed so the rep can find them without a back-and-forth. The
+ * rep answers by copying the claim link from the order in the admin.
+ */
+export function buildAccountLinkRequestUrl(kitchenWhatsapp: string, phone: string | null): string {
+  const who = phone ? ` My number is ${displayPhone(phone)}.` : '';
+  const text = `Namaste Vaatsalya Kitchens! I ordered at the counter and would like to set up my account.${who} Please send my account link.`;
+  return `https://wa.me/${kitchenWhatsapp}?text=${encodeURIComponent(text)}`;
+}
