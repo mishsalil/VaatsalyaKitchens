@@ -684,13 +684,20 @@ function route($method, $action, $parts): void
         if (!$order) {
             Response::error('Order not found.', 404);
         }
-        db()->prepare(
-            'UPDATE orders
-                SET status = ?,
-                    delivered_at = CASE WHEN ? = \'delivered\' AND delivered_at IS NULL
-                                        THEN NOW() ELSE delivered_at END
-              WHERE id = ?'
-        )->execute([$status, $status, $id]);
+        /* delivered_at is stamped once, on the first transition to delivered:
+           COALESCE keeps an existing value, so re-saving a delivered order does
+           not push its review prompt an hour into the future.
+
+           The branch is in PHP on purpose. The first version compared the bound
+           status to a literal in SQL (CASE WHEN ? = 'delivered'), which worked
+           locally and threw 1267 "Illegal mix of collations" in production: a
+           bound parameter takes the CONNECTION's collation, a literal takes the
+           DATABASE's, and when the two differ MySQL has no rule for which wins.
+           Never compare a placeholder to a string literal in this codebase. */
+        $sql = $status === 'delivered'
+            ? 'UPDATE orders SET status = ?, delivered_at = COALESCE(delivered_at, NOW()) WHERE id = ?'
+            : 'UPDATE orders SET status = ? WHERE id = ?';
+        db()->prepare($sql)->execute([$status, $id]);
         log_order_event($id, 'admin', (int)$admin['id'], (string)$admin['username'],
             $status === 'cancelled' ? 'cancelled' : 'status',
             ['from' => $order['status'], 'to' => $status]);
