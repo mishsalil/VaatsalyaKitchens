@@ -4,6 +4,9 @@ import type { Address } from '../../shared/types';
 import { useGeolocation } from '../../shared/hooks/useGeolocation';
 import { Textarea } from '../../shared/components/ui/Input';
 import { Field } from '../../shared/components/ui/Field';
+import { useAuth } from '../../shared/hooks/useAuth';
+import { composeAddressText } from '../../shared/lib/addressText';
+import { MapPinPicker, type AddressDraft } from './MapPinPicker';
 
 export type AddressPayload =
   | { mode: 'pickup' }
@@ -32,6 +35,17 @@ export function AddressPicker({ addresses, value, onChange }: Props) {
   const [addressText, setAddressText] = useState('');
   const [coords, setCoords] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const { locate, status, locating } = useGeolocation();
+
+  /* With a Google Maps key the new-address branch is the pin picker: three
+     fields composed into address_text, coordinates from the pin. Without one
+     it is the textarea and GPS button it always was. */
+  const { settings } = useAuth();
+  const hasMap = !!settings?.google_maps_key;
+  const [draft, setDraft] = useState<AddressDraft>({ house: '', landmark: '', area: '', lat: null, lng: null });
+  const reportDraft = (d: AddressDraft) => {
+    setDraft(d);
+    onChange({ mode: 'new', address_text: composeAddressText(d), lat: d.lat, lng: d.lng });
+  };
 
   const pickSaved = (id: number) => onChange({ mode: 'saved', address_id: id });
 
@@ -79,10 +93,20 @@ export function AddressPicker({ addresses, value, onChange }: Props) {
         </div>
       )}
 
-      {radio(<Plus className="h-4 w-4" />, <span>Use a different address</span>, mode === 'new', () => onChange({ mode: 'new', address_text: addressText, lat: coords.lat, lng: coords.lng }))}
+      {radio(<Plus className="h-4 w-4" />, <span>Use a different address</span>, mode === 'new', () =>
+        hasMap
+          ? reportDraft(draft)
+          : onChange({ mode: 'new', address_text: addressText, lat: coords.lat, lng: coords.lng })
+      )}
       {radio(<Store className="h-4 w-4" />, <span>No delivery — I will pick up</span>, mode === 'pickup', () => onChange({ mode: 'pickup' }))}
 
-      {mode === 'new' && (
+      {mode === 'new' && hasMap && (
+        <div className="rounded-xl border border-cream-200 bg-cream-50 p-4">
+          <MapPinPicker value={draft} onChange={reportDraft} />
+        </div>
+      )}
+
+      {mode === 'new' && !hasMap && (
         <div className="space-y-3 rounded-xl border border-cream-200 bg-cream-50 p-4">
           <button
             type="button"

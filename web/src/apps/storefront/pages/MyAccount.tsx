@@ -14,6 +14,8 @@ import { Textarea, Select } from '../../shared/components/ui/Input';
 import { Modal } from '../../shared/components/ui/Modal';
 import { Tabs } from '../../shared/components/ui/Tabs';
 import { SkeletonRows, Skeleton } from '../../shared/components/Skeleton';
+import { composeAddressText } from '../../shared/lib/addressText';
+import { MapPinPicker, type AddressDraft } from '../components/MapPinPicker';
 import { StatusBadge } from '../../shared/components/StatusBadge';
 import { AddressCard } from '../components/AddressCard';
 import { ReorderButton } from '../components/ReorderButton';
@@ -213,16 +215,28 @@ function AddAddressModal({ onClose, onSaved, onError }: { onClose: () => void; o
   const [text, setText] = useState('');
   const [textErr, setTextErr] = useState('');
   const [busy, setBusy] = useState(false);
+  /* With a maps key the address is a pin plus three fields; without, the
+     textarea it always was. Saved addresses used to carry no coordinates at
+     all, which left the rider with nothing to navigate to. */
+  const { settings } = useAuth();
+  const hasMap = !!settings?.google_maps_key;
+  const [draft, setDraft] = useState<AddressDraft>({ house: '', landmark: '', area: '', lat: null, lng: null });
 
   const save = async () => {
-    if (!text.trim()) {
+    const addressText = hasMap ? composeAddressText(draft) : text.trim();
+    if (!addressText) {
       setTextErr('Please write the address.');
       return;
     }
     setTextErr('');
     setBusy(true);
     try {
-      await addressesApi.add({ label: label.trim() || 'Home', address_text: text.trim(), lat: null, lng: null });
+      await addressesApi.add({
+        label: label.trim() || 'Home',
+        address_text: addressText,
+        lat: hasMap ? draft.lat : null,
+        lng: hasMap ? draft.lng : null,
+      });
       onSaved();
     } catch (e) {
       onError((e as Error).message);
@@ -251,9 +265,16 @@ function AddAddressModal({ onClose, onSaved, onError }: { onClose: () => void; o
             <option>Other</option>
           </Select>
         </Field>
-        <Field label="Address" htmlFor="addr-text" error={textErr}>
-          <Textarea id="addr-text" rows={3} value={text} invalid={!!textErr} onChange={(e) => { setText(e.target.value); setTextErr(''); }} placeholder="House no., street, area…" />
-        </Field>
+        {hasMap ? (
+          <div>
+            <MapPinPicker value={draft} onChange={(d) => { setDraft(d); setTextErr(''); }} />
+            {textErr && <p className="mt-2 text-sm text-red-600">{textErr}</p>}
+          </div>
+        ) : (
+          <Field label="Address" htmlFor="addr-text" error={textErr}>
+            <Textarea id="addr-text" rows={3} value={text} invalid={!!textErr} onChange={(e) => { setText(e.target.value); setTextErr(''); }} placeholder="House no., street, area…" />
+          </Field>
+        )}
       </div>
     </Modal>
   );
