@@ -173,7 +173,7 @@ export function MyAccount() {
 }
 
 function PushStatusCard() {
-  const { supported, permission, subscribed, ensure, unsubscribe } = usePush();
+  const { native, supported, permission, subscribed, ensure, unsubscribe } = usePush();
 
   if (!supported) {
     return (
@@ -189,8 +189,9 @@ function PushStatusCard() {
       <div className="card-soft p-5">
         <h3 className="flex items-center gap-2 text-base font-bold text-brand-900"><BellOff className="h-5 w-5" /> Notifications are blocked</h3>
         <p className="mt-1 text-sm text-brand-600">
-          You've blocked notifications for this site. To get order updates, open your browser's site settings and allow
-          notifications for Vaatsalya Kitchens, then reload.
+          {native
+            ? 'Notifications are off for this app. To get order updates, open Android Settings → Apps → Vaatsalya Kitchens → Notifications and allow them, then reopen the app.'
+            : "You've blocked notifications for this site. To get order updates, open your browser's site settings and allow notifications for Vaatsalya Kitchens, then reload."}
         </p>
       </div>
     );
@@ -203,7 +204,8 @@ function PushStatusCard() {
           <h3 className="flex items-center gap-2 text-base font-bold text-brand-900"><BellRing className="h-5 w-5 text-gold-600" /> Notifications on</h3>
           <p className="mt-1 text-sm text-brand-600">We'll ping this device when your order is confirmed and on its way.</p>
         </div>
-        <Button variant="ghost" onClick={() => unsubscribe().then(() => {})}>Turn off</Button>
+        {/* The app's notifications are switched off in Android settings, not here. */}
+        {!native && <Button variant="ghost" onClick={() => unsubscribe().then(() => {})}>Turn off</Button>}
       </div>
     );
   }

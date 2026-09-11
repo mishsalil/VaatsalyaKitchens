@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
-import { pushManager, type PushPermission } from './PushManager';
+import { pushManager, type PushPermission, type PushState } from './PushManager';
 import { isNativePlatform, registerNativePush, attachNativePushHandlers } from './nativePush';
 import { useAuth } from '../hooks/useAuth';
 import { pushApi } from '../api/endpoints';
 
 interface PushContextValue {
+  /** Running inside the Android shell, where push is FCM rather than Web Push. */
+  native: boolean;
   supported: boolean;
   permission: PushPermission;
   subscribed: boolean;
@@ -47,10 +49,17 @@ export function PushProvider({ children }: { children: ReactNode }) {
      customer_id NULL, and without this the device would still be nobody's after
      they signed in — reachable about nothing. Signing out re-sends it as a
      guest again, which is what should happen on a shared device. */
+  /* In the app, the state the UI shows comes from the FCM registration, not
+     from the Web Push detector — which is false in a WebView (no service
+     worker, no PushManager) and used to make the account page tell a
+     subscribed customer that push was "not supported by your browser". A
+     token means on; a refused permission means blocked. */
+  const [nativeState, setNativeState] = useState<PushState | null>(null);
   useEffect(() => {
     if (!isNativePlatform()) return;
     attachNativePushHandlers();
     registerNativePush().then((token) => {
+      setNativeState({ supported: true, permission: token ? 'granted' : 'denied', subscribed: !!token });
       if (!token) return;
       // Best-effort: a device that cannot register still uses the app fine.
       pushApi.registerFcm(token).catch(() => {});
@@ -58,6 +67,11 @@ export function PushProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   useEffect(() => pushManager.subscribe(setState), []);
+
+  const native = isNativePlatform();
+  const shown: PushState = native
+    ? (nativeState ?? { supported: true, permission: 'default', subscribed: false })
+    : state;
 
   const ensure = useCallback(() => pushManager.ensureSubscribed(), []);
   const requestPermission = useCallback(() => pushManager.requestPermission(), []);
@@ -81,9 +95,10 @@ export function PushProvider({ children }: { children: ReactNode }) {
   return (
     <PushContext.Provider
       value={{
-        supported: state.supported,
-        permission: state.permission,
-        subscribed: state.subscribed,
+        native,
+        supported: shown.supported,
+        permission: shown.permission,
+        subscribed: shown.subscribed,
         ensure,
         requestPermission,
         unsubscribe,

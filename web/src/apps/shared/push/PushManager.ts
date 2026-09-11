@@ -14,7 +14,7 @@ import { pushApi } from '../api/endpoints';
 
 export type PushPermission = 'default' | 'granted' | 'denied' | 'unsupported';
 
-interface PushState {
+export interface PushState {
   supported: boolean;
   permission: PushPermission;
   subscribed: boolean;

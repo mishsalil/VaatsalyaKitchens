@@ -42,7 +42,7 @@ const COPY: Record<PushSurface, { title: string; body: string }> = {
  * re-subscribes. When the user has blocked notifications, it steps aside.
  */
 export function PushNudge({ surface, variant = 'card' }: Props) {
-  const { supported, permission, subscribed, requestPermission, ensure, dismiss, isDismissed } = usePush();
+  const { native, supported, permission, subscribed, requestPermission, ensure, dismiss, isDismissed } = usePush();
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<'granted' | 'denied' | null>(null);
 
@@ -55,6 +55,10 @@ export function PushNudge({ surface, variant = 'card' }: Props) {
     }
   }, [supported, permission, subscribed, busy, ensure]);
 
+  /* In the app the permission prompt is Android's own, raised at registration;
+     this nudge's button would call the Web Push API, which does not exist
+     there. The account page's status card covers the app. */
+  if (native) return null;
   if (!supported) return null;
   // Blocked by the browser — nothing we can do here; account page shows guidance.
   if (permission === 'denied') return null;
