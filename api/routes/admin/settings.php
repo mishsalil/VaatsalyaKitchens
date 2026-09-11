@@ -133,8 +133,40 @@ function rate_limit_admin_password(string $username): void
 }
 
 /**
- * Save an uploaded logo to web/public/branding/ and return its URL path
- * (/branding/logo.<ext>). Validates MIME + size; rejects anything else.
+ * Where the logo lives — the same dev/prod split as dish_image_dir().
+ *
+ * In a checkout it is web/public/branding, which Vite serves and the build
+ * copies. On the server there is NO web/ directory: the deploy flattens the
+ * built bundle into the document root, so /branding sits directly under it.
+ * Writing to the checkout path there produced a logo the server never served,
+ * while logo_path in the database pointed at /branding/logo.png regardless.
+ */
+function branding_dir(): string
+{
+    /* Detect a checkout by web/src, NOT by web/public: the old code mkdir'd
+       web/public/branding on the server, so that directory now exists there
+       and would keep swallowing uploads. Only a real checkout has sources. */
+    $web = __DIR__ . '/../../../web';
+    if (is_dir($web . '/src')) {
+        return $web . '/public/branding';
+    }
+    $root = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), "/\\");
+    return $root === '' ? '' : $root . '/branding';
+}
+
+/** Longest side we keep. A header logo never needs more; a 1600px design
+ *  export was 489 KB and a 1.9 MB one made the CDN's optimiser give up. */
+const LOGO_MAX_PX = 800;
+
+/**
+ * Save an uploaded logo and return its URL path (/branding/logo.<ext>).
+ *
+ * Raster logos are decoded and re-encoded through GD when it is available:
+ * that shrinks anything over LOGO_MAX_PX and normalises exotic PNGs (16-bit,
+ * interlaced, huge) into a plain file every CDN can read. Without GD the file
+ * is validated with getimagesize and stored as-is, with a dimension cap so an
+ * unreadable-to-the-CDN giant is refused rather than silently broken. SVG is
+ * text and passes through untouched either way.
  */
 function save_uploaded_logo(): string
 {
@@ -163,9 +195,48 @@ function save_uploaded_logo(): string
     }
     $ext = $extByMime[$mime];
 
-    $dir = __DIR__ . '/../../../web/public/branding';
+    /* Rasters must really decode. A MIME type alone can be forged by prefixing
+       image bytes to something else, and getimagesize is core PHP. */
+    $size = null;
+    if ($ext !== 'svg') {
+        $size = @getimagesize($f['tmp_name']);
+        if ($size === false || $size[0] < 1 || $size[1] < 1) {
+            Response::error('That file is not a readable image.');
+        }
+    }
+
+    $dir = branding_dir();
+    if ($dir === '') {
+        Response::error('Cannot determine where to store the logo.', 500);
+    }
     if (!is_dir($dir) && !@mkdir($dir, 0775, true)) {
         Response::error('Could not create branding directory.', 500);
+    }
+
+    /* Re-encode through GD when we can. Anything wider than LOGO_MAX_PX is
+       scaled down, and the output is always a plain 8-bit PNG with alpha —
+       the one raster format every browser and CDN agrees on. */
+    $gd = $ext !== 'svg' && function_exists('imagecreatefromstring') && function_exists('imagepng');
+    if ($gd) {
+        $img = @imagecreatefromstring((string)file_get_contents($f['tmp_name']));
+        if ($img === false) {
+            Response::error('That image could not be decoded.');
+        }
+        $w = imagesx($img);
+        $h = imagesy($img);
+        $scale = min(1, LOGO_MAX_PX / max($w, $h));
+        if ($scale < 1) {
+            $resized = imagescale($img, (int)round($w * $scale), (int)round($h * $scale), IMG_BICUBIC);
+            imagedestroy($img);
+            if ($resized === false) {
+                Response::error('Could not resize the logo.', 500);
+            }
+            $img = $resized;
+        }
+        imagesavealpha($img, true);
+        $ext = 'png';
+    } elseif ($ext !== 'svg' && ($size[0] > 2000 || $size[1] > 2000)) {
+        Response::error('Logo is too large. Please use one under 2000 pixels on each side.');
     }
 
     // Single canonical filename per type; overwrite previous logo. Remove any
@@ -176,7 +247,11 @@ function save_uploaded_logo(): string
         }
     }
     $dest = "$dir/logo.$ext";
-    if (!move_uploaded_file($f['tmp_name'], $dest)) {
+    $saved = $gd ? imagepng($img, $dest, 6) : move_uploaded_file($f['tmp_name'], $dest);
+    if ($gd) {
+        imagedestroy($img);
+    }
+    if (!$saved) {
         Response::error('Could not save the logo.', 500);
     }
     return '/branding/logo.' . $ext;
