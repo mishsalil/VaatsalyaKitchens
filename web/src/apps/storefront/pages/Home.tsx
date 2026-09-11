@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  PartyPopper, Coffee, CookingPot, Home as HomeIcon, ArrowRight, Phone, Mail, Clock, MapPin, ShieldCheck, UtensilsCrossed, ChevronRight,
+  PartyPopper, Coffee, CookingPot, Home as HomeIcon, ArrowRight, Phone, Mail, Clock, MapPin, UtensilsCrossed, ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useFetch } from '../../shared/hooks/useFetch';
@@ -72,10 +72,7 @@ export function Home() {
       <section className="bg-cream-50">
         <div className="container-wide grid items-center gap-6 py-8 sm:py-12 md:grid-cols-2">
           <div>
-            <p className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-gold-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-gold-500" /> Food made with the warmth of home
-            </p>
-            <h1 className="mt-3 font-serif text-4xl font-bold leading-tight text-brand-900 sm:text-5xl">
+            <h1 className="font-serif text-4xl font-bold leading-tight text-brand-900 sm:text-5xl">
               <span className="font-devanagari" lang="hi">वात्सल्य</span> Kitchens
             </h1>
             <p className="mt-3 max-w-md text-brand-600">
@@ -241,9 +238,6 @@ export function Home() {
           </section>
         )}
 
-        <p className="flex items-center justify-center gap-2 pb-2 text-xs text-brand-400">
-          <ShieldCheck className="h-4 w-4" /> We re-read every price from our kitchen — what you see is what we charge.
-        </p>
       </div>
     </div>
   );
