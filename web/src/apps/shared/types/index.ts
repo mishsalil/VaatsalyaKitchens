@@ -27,6 +27,8 @@ export interface Settings {
   kitchen_phone_display: string;
   kitchen_email: string;
   logo_path?: string | null;
+  /** Google Maps JavaScript API key for the address picker. Blank = plain textarea. */
+  google_maps_key?: string;
   /** Tax-exclusive GST rate (percent), split equally SGST/CGST. "0" disables GST. */
   gst_rate?: string;
   /** Smallest pre-tax subtotal we accept, in rupees. "0" means no minimum. */
