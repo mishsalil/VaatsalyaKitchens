@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CheckCircle2, MessageCircle, ListChecks } from 'lucide-react';
 import { ordersApi } from '../../shared/api/endpoints';
@@ -17,9 +18,14 @@ import { CancelCountdown } from '../components/CancelCountdown';
 export function OrderSuccess() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { settings } = useAuth();
+  const { settings, user } = useAuth();
   const orderId = Number(id);
   const { data, loading, error, refetch } = useFetch(() => ordersApi.show(orderId), [orderId]);
+  /* The PIN gate: shown first, before the tracker, bill and share buttons,
+     to a customer who has none. Saving or "Skip for now" reveals the rest.
+     The cancel countdown stays above it — that one is on a five-minute clock. */
+  const [pinSkipped, setPinSkipped] = useState(false);
+  const needsPin = !!user && !user.has_pin && !pinSkipped;
 
   if (loading) {
     return (
@@ -94,6 +100,13 @@ export function OrderSuccess() {
         onCancelled={() => refetch()}
       />
 
+      {needsPin && (
+        <div className="mt-6">
+          <PinSetup prominent onSkip={() => setPinSkipped(true)} />
+        </div>
+      )}
+
+      {!needsPin && (<>
       {/* Live status tracker */}
       <div className="mt-6">
         <OrderStatusPoller orderId={order.id} initial={order} />
@@ -125,9 +138,7 @@ export function OrderSuccess() {
         </Link>
       </div>
 
-      <div className="mt-6">
-        <PinSetup />
-      </div>
+      </>)}
 
       <button
         type="button"

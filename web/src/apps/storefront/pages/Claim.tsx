@@ -7,6 +7,7 @@ import { useAuth } from '../../shared/hooks/useAuth';
 import { Button } from '../../shared/components/ui/Button';
 import { PushNudge } from '../../shared/push/PushNudge';
 import { usePush } from '../../shared/push/usePush';
+import { PinSetup } from '../components/PinSetup';
 
 /**
  * /claim/:token — redeems the one-time link a rep WhatsApps after taking an
@@ -29,6 +30,7 @@ export function Claim() {
   const { ensure } = usePush();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [pinSkipped, setPinSkipped] = useState(false);
   const redeemed = useRef(false);
 
   useEffect(() => {
@@ -87,12 +89,20 @@ export function Claim() {
           <p className="mt-1 text-sm text-brand-600">This phone will remember you from now on.</p>
         </div>
 
-        {/* The whole point of stopping here — ask while the order is live. */}
-        <PushNudge surface="claim" />
+        {/* A counter customer arrives here with no PIN at all. This is the one
+            moment we have their attention on their own phone — ask now. */}
+        {user && !user.has_pin && !pinSkipped ? (
+          <PinSetup prominent onSkip={() => setPinSkipped(true)} />
+        ) : (
+          <>
+            {/* The whole point of stopping here — ask while the order is live. */}
+            <PushNudge surface="claim" />
 
-        <div className="flex justify-center">
-          <Link to="/account"><Button>View my order</Button></Link>
-        </div>
+            <div className="flex justify-center">
+              <Link to="/account"><Button>View my order</Button></Link>
+            </div>
+          </>
+        )}
       </div>
     );
   }

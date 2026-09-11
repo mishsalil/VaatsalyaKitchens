@@ -14,6 +14,7 @@ import { PushNudge } from '../../shared/push/PushNudge';
 import { describeWeek } from '../../shared/lib/hours';
 import { DISH_PHOTO_IDS } from '../../shared/lib/dishPhotos';
 import { PendingReviewCard } from '../components/PendingReviewCard';
+import { PinReminder } from '../components/PinReminder';
 
 const SERVICES = [
   { icon: PartyPopper, title: 'Small Parties', body: 'Birthdays, anniversaries and family functions for 10–50 guests. Curated veg menus, served hot, right on time.' },
@@ -107,6 +108,7 @@ export function Home() {
 
       <div className="container-wide space-y-10 py-8">
         <PendingReviewCard />
+        <PinReminder />
         <PushNudge surface="home" />
 
         {/* Categories quick-nav */}

@@ -6,8 +6,16 @@ import { useAuth } from '../../shared/hooks/useAuth';
 import { Input } from '../../shared/components/ui/Input';
 import { Button } from '../../shared/components/ui/Button';
 
-/** Set or change the 4-digit PIN that lets the customer sign in from another device. */
-export function PinSetup() {
+/**
+ * Set the 4-digit PIN that lets the customer sign in from another device.
+ *
+ * `prominent` is the gate shown straight after an order or a claim link: a
+ * stronger heading, no "optional", and a "Skip for now" that calls `onSkip`.
+ * A hard block would lose customers who have just paid; a gate they must
+ * actively skip, plus the reminder on Home until it is set, gets nearly the
+ * same result without the resentment. `onSaved` fires after a successful save.
+ */
+export function PinSetup({ prominent = false, onSkip, onSaved }: { prominent?: boolean; onSkip?: () => void; onSaved?: () => void } = {}) {
   const { user, refresh } = useAuth();
   const toast = useToast();
   const [pin, setPin] = useState('');
@@ -34,6 +42,7 @@ export function PinSetup() {
       await refresh();
       setPin('');
       toast.success('PIN saved — you can now sign in from any device with your phone number.');
+      onSaved?.();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -42,14 +51,15 @@ export function PinSetup() {
   };
 
   return (
-    <div className="card-soft p-5">
+    <div className={prominent ? 'rounded-2xl border-2 border-gold-400 bg-white p-5 shadow-card' : 'card-soft p-5'}>
       <h3 className="flex items-center gap-2 text-lg font-bold text-brand-900">
-        <KeyRound className="h-5 w-5 text-gold-600" /> Set a 4-digit PIN
-        <span className="text-sm font-normal text-brand-400">(optional, 10 seconds)</span>
+        <KeyRound className="h-5 w-5 text-gold-600" /> {prominent ? 'One more thing — set your PIN' : 'Set a 4-digit PIN'}
+        {!prominent && <span className="text-sm font-normal text-brand-400">(optional, 10 seconds)</span>}
       </h3>
       <p className="mt-1 text-sm text-brand-600">
-        We already remember you on this phone. A PIN lets you sign in from any other device with just your phone
-        number — to reorder in two taps and see your order history.
+        {prominent
+          ? 'Four digits, ten seconds. It lets you sign in from any phone with just your number — to track this order, reorder in two taps, and see your history.'
+          : 'We already remember you on this phone. A PIN lets you sign in from any other device with just your phone number — to reorder in two taps and see your order history.'}
       </p>
       <form
         className="mt-4 flex flex-wrap items-end gap-3"
@@ -82,6 +92,11 @@ export function PinSetup() {
           {busy ? 'Saving…' : 'Save PIN'}
         </Button>
       </form>
+      {prominent && onSkip && (
+        <button type="button" onClick={onSkip} className="mt-3 text-xs text-brand-400 hover:underline">
+          Skip for now
+        </button>
+      )}
     </div>
   );
 }
