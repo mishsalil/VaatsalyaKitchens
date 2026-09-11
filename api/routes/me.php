@@ -34,6 +34,8 @@ function route($method, $action, $parts): void
             'kitchen_email'         => $s['kitchen_email'],
             'logo_path'             => $s['logo_path'],
             'google_maps_key'       => (string)($s['google_maps_key'] ?? ''),
+            'google_review_url'     => (string)($s['google_review_url'] ?? ''),
+            'google_place_id'       => (string)($s['google_place_id'] ?? ''),
             'gst_rate'              => (string)($s['gst_rate'] ?? '0'),
             'min_order_value'       => (string)($s['min_order_value'] ?? '0'),
             'base_url'              => $cfg['base_url'],

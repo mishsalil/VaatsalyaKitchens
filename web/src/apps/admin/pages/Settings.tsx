@@ -48,6 +48,8 @@ export function AdminSettings() {
         print_footer: form.print_footer,
         gst_rate: form.gst_rate,
         google_maps_key: form.google_maps_key ?? '',
+        google_review_url: form.google_review_url ?? '',
+        google_place_id: form.google_place_id ?? '',
       });
       setForm(res.settings);
       toast.success('Settings saved — storefront updated');
@@ -141,6 +143,12 @@ export function AdminSettings() {
           </Field>
           <Field label="Google Maps API key" htmlFor="k-maps" hint="for the customer's address picker — blank keeps the plain address box">
             <Input id="k-maps" value={form.google_maps_key ?? ''} onChange={(e) => set('google_maps_key', e.target.value.trim())} placeholder="AIza…" autoComplete="off" />
+          </Field>
+          <Field label="Google review link" htmlFor="k-review" hint="Business Profile → Ask for reviews. Shown to every customer after they rate an order.">
+            <Input id="k-review" value={form.google_review_url ?? ''} onChange={(e) => set('google_review_url', e.target.value.trim())} placeholder="https://g.page/r/…/review" autoComplete="off" />
+          </Field>
+          <Field label="Google Place ID" htmlFor="k-place" hint="shows your live Google rating on the storefront — needs the Maps key above">
+            <Input id="k-place" value={form.google_place_id ?? ''} onChange={(e) => set('google_place_id', e.target.value.trim())} placeholder="ChIJ…" autoComplete="off" />
           </Field>
           <Field label="Receipt footer note" htmlFor="k-footer" hint="optional" className="sm:col-span-2">
             <Input id="k-footer" value={form.print_footer} onChange={(e) => set('print_footer', e.target.value)} />

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Loader2, ShieldX, Check } from 'lucide-react';
+import { Loader2, ShieldX, Check, Star } from 'lucide-react';
 import { api } from '../../shared/api/client';
+import { useAuth } from '../../shared/hooks/useAuth';
+import { GoogleRatingBadge } from '../components/GoogleRatingBadge';
 import { groupRateLines, type RateOrderItem } from '../../shared/lib/rateLines';
 import { Button } from '../../shared/components/ui/Button';
 import { FormError } from '../../shared/components/ui/FormError';
@@ -25,6 +27,8 @@ type RateOrder = {
  */
 export function Rate() {
   const { token = '' } = useParams();
+  const { settings } = useAuth();
+  const googleReviewUrl = settings?.google_review_url || '';
   const [order, setOrder] = useState<RateOrder | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [stars, setStars] = useState(0);
@@ -97,6 +101,21 @@ export function Rate() {
         <p className="mx-auto mt-2 max-w-sm text-sm text-brand-600">
           Your feedback goes straight to our kitchen.
         </p>
+        {/* Shown after EVERY rating, 1 star or 5. Google forbids review gating
+            — offering the link only to happy customers — and the unhappy ones
+            have just told us privately on this same page anyway. */}
+        {googleReviewUrl && (
+          <div className="mx-auto mt-8 max-w-sm rounded-2xl border border-cream-200 bg-white p-5 text-left shadow-card">
+            <p className="text-sm font-semibold text-brand-900">Would you share it on Google too?</p>
+            <p className="mt-1 text-sm text-brand-600">A public review helps other families in Sitapur find us. It takes a minute.</p>
+            <a href={googleReviewUrl} target="_blank" rel="noopener noreferrer" className="mt-4 block">
+              <Button variant="outline" fullWidth>
+                <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> Rate us on Google
+              </Button>
+            </a>
+            <GoogleRatingBadge className="mt-3" />
+          </div>
+        )}
         {claimToken && (
           <div className="mx-auto mt-8 max-w-sm rounded-2xl border border-cream-200 bg-white p-5 text-left shadow-card">
             <p className="text-sm font-semibold text-brand-900">Want to track and reorder next time?</p>

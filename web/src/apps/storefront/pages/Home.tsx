@@ -15,6 +15,7 @@ import { describeWeek } from '../../shared/lib/hours';
 import { DISH_PHOTO_IDS } from '../../shared/lib/dishPhotos';
 import { PendingReviewCard } from '../components/PendingReviewCard';
 import { PinReminder } from '../components/PinReminder';
+import { GoogleRatingBadge } from '../components/GoogleRatingBadge';
 
 const SERVICES = [
   { icon: PartyPopper, title: 'Small Parties', body: 'Birthdays, anniversaries and family functions for 10–50 guests. Curated veg menus, served hot, right on time.' },
@@ -79,6 +80,7 @@ export function Home() {
             <p className="mt-3 max-w-md text-brand-600">
               Homestyle veg meals for small parties, kitty gatherings and bulk orders — so simple, anyone from 12 to 70+ can order in minutes.
             </p>
+            <GoogleRatingBadge className="mt-4" />
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link to="/order">
                 <Button size="lg">

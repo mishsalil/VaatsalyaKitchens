@@ -41,6 +41,12 @@ function settings_defaults(): array
            runs in the browser); the referrer restriction in Google Cloud is
            what protects it. */
         'google_maps_key'      => '',
+        /* Google Business Profile. The review URL is the "Ask for reviews" link
+           (g.page/r/…/review) — one tap opens the review box already pointed
+           at the kitchen. The Place ID lets the storefront show the live Google
+           rating. Both blank = neither feature appears. */
+        'google_review_url'    => '',
+        'google_place_id'      => '',
     ];
 }
 
