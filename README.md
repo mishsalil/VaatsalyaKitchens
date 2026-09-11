@@ -93,6 +93,30 @@ new file added by a later phase must be added to the script's `$files` list
 too — worth knowing if this gets deployed to a host with its own timezone
 quirks.
 
+## Address picker (Google Maps)
+
+Customers place a pin on a map; the rider navigates to the pin. The pin's
+coordinates are the truth and the typed text is a label. The counter pastes a
+Google Maps link a customer sent on WhatsApp instead (no key needed for that,
+nor for the rider's Navigate button).
+
+The map needs a **Google Maps JavaScript API key**, entered once in
+**Admin → Settings**. It is stored as a setting, not baked into the build, so
+rotating it needs no new APK. **Blank means the plain address box** — nothing
+breaks before the key exists.
+
+Setting it up in Google Cloud:
+
+1. Create a project and attach billing (each API below has a free monthly
+   tier of 10,000 calls; at this volume the bill should be ₹0).
+2. Enable **Maps JavaScript API**, **Places API (New)** and **Geocoding API**.
+3. Create an API key restricted to those three APIs and to the HTTP referrers
+   `vaatsalyakitchens.in/*` **and `localhost/*`** — the Android app serves
+   the storefront from `https://localhost`, so without the second one the map
+   is blank in the app.
+4. Set a daily quota on the key. It is public by design (it runs in the
+   browser), so the referrer restriction plus the quota is what protects it.
+
 ## Running locally (for development)
 
 ```bash
