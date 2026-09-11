@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { Home as HomeIcon, UtensilsCrossed, User, LogIn, MapPin } from 'lucide-react';
 import { useAuth } from '../../shared/hooks/useAuth';
@@ -97,6 +97,22 @@ export function CustomerLayout() {
   const { count } = useCart();
   const location = useLocation();
 
+  /* React Router swaps the page but leaves the scroll position alone, so a
+     footer link opened from the bottom of one page arrived at the bottom of
+     the next. Scroll to the top on every navigation — or to the anchor when
+     the link names one, which is how the home page's category chips reach
+     /order#cat-N. The anchor may not exist yet if the menu is still loading;
+     in that case the top is the right fallback. */
+  useEffect(() => {
+    const id = location.hash.replace(/^#/, '');
+    const target = id ? document.getElementById(id) : null;
+    if (target) {
+      target.scrollIntoView({ block: 'start' });
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname, location.hash]);
+
   return (
     <div className="flex min-h-dvh flex-col bg-cream-100">
       {/* Clean white sticky app bar */}
@@ -138,7 +154,7 @@ export function CustomerLayout() {
           padding on small screens clears the fixed bottom nav. */}
       <footer className="border-t border-cream-200 bg-white px-4 pb-24 pt-3 text-sm text-brand-500 sm:pb-3">
         <div className="container-wide">
-          <nav className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+          <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
             <Link to="/contact" className="link-quiet">Contact Us</Link>
             <Link to="/terms" className="link-quiet">Terms &amp; Conditions</Link>
             <Link to="/privacy" className="link-quiet">Privacy Policy</Link>
