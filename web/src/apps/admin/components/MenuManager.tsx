@@ -385,7 +385,8 @@ export function MenuManager() {
               <>
                 Columns: <code>category, subcategory, item, price, unit, available, variants, addons</code>.
                 Leave <code>subcategory</code>, <code>variants</code> and <code>addons</code> empty when not needed.
-                Variants: <code>Half:-70|Full:*+150</code> (the <code>*</code> marks the default size; deltas are signed).
+                Variants: <code>Preparation=Half:-70|Full:*+150|Vegetables=With Vegetables:*0|Without Vegetables:0</code>
+                (<code>Group=</code> starts a radio group; <code>*</code> marks that group's default; deltas are signed).
                 Add-ons: <code>Cheese:40|Cashews:60</code>. Items are matched by category + item name and updated in place.
               </>
             }
