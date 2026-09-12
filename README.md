@@ -62,6 +62,12 @@ can order easily.
 That's it. Orders will appear in `/admin` and customers register themselves
 just by ordering.
 
+**Updating an existing production database** (before ticking `migrations_done`
+in the deploy workflow): run `database/migration_015_variant_groups.sql` (or
+the cumulative `database/migrate_production.sql`, which includes it), then
+re-run the "015 — groups" section at the bottom of `database/menu_options.sql`
+so the Preparation/Vegetables groups and their defaults are seeded.
+
 ## Menu data from Zomato
 
 `database/menu_descriptions.sql`, `menu_additions.sql` and `menu_options.sql` were
@@ -72,6 +78,32 @@ prices and Zomato's upcharges are applied relative to its cheapest option, so
 add-on groups are the kitchen's guess — South Indian sides on dosas, uttapams and
 medu vada; Extra Cheese on sandwiches and wraps; Without Vegetables on noodles, fried
 rice and the Chinese combos. Change them in Admin → Menu like any other option.
+
+## Menu options (variants and add-ons)
+
+Variants can be grouped into radio choices — e.g. Preparation (Half / Full) and,
+independently, Vegetables (With / Without) on the same dish. A group is set by
+`menu_item_variants.group_label`; variants with no group are still a flat radio
+list, defaulting to "Preparation". Each group needs exactly one default
+(`is_default = 1`) — the picker and counter both pick the first row otherwise,
+which is why `menu_options.sql` always deletes and re-inserts a group's rows
+together rather than patching one at a time.
+
+In the menu CSV, the `variants` cell packs one or more groups into a single
+pipe-joined string: `name:delta`, with a leading `*` marking that variant as
+the group's default, and a `Group=` prefix starting a new group (the first
+group with no prefix defaults to Preparation). For example:
+
+```
+Preparation=Half:-70|Full:*+150|Vegetables=With Vegetables:*0|Without Vegetables:0
+```
+
+An order line can select more than one variant (one per group) — `order_items`
+stores that as a JSON `variant_ids` array, which supersedes the older
+single-value `variant_id` column. `variant_id` is still populated (from the
+first id) for old reports and integrations that read it, but the app itself
+reads `variant_ids` and falls back to `variant_id` only when `variant_ids` is
+absent (older app builds).
 
 ## Review prompts (cron)
 
