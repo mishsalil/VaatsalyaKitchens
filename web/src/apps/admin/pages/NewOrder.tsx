@@ -253,6 +253,11 @@ export function AdminNewOrder() {
           }
           const item = itemById.get(itemId);
           if (!item) { unresolved++; continue; }
+          // One id per group the dish has today: keep the stored choice where it still
+          // exists, else the group's default (a dish can gain a group after an order).
+          variantIds = groupVariants(item.variants).map(
+            (g) => g.options.find((o) => variantIds.includes(o.id))?.id ?? g.defaultId,
+          );
           const key = cartKey(itemId, variantIds, addonIds);
           next[key] = { itemId, variantIds, addonIds, qty: line.qty };
         }
