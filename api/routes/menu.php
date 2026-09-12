@@ -24,7 +24,7 @@ function route($method, $action, $parts): void
     )->fetchAll();
 
     $stmt = $db->prepare(
-        'SELECT id, category_id, subcategory_id, name, description, price, unit FROM menu_items
+        'SELECT id, category_id, subcategory_id, name, description, price, unit, sort_order FROM menu_items
           WHERE available = 1 AND (branch_id = ? OR branch_id IS NULL)
           ORDER BY sort_order, id'
     );
@@ -79,6 +79,7 @@ function route($method, $action, $parts): void
     foreach ($items as &$it) {
         $iid = (int)$it['id'];
         $it['price'] = (float)$it['price'];
+        $it['sort_order'] = (int)$it['sort_order'];
         $it['subcategory_id'] = $it['subcategory_id'] !== null ? (int)$it['subcategory_id'] : null;
         $it['variants'] = $variantsByItem[$iid] ?? [];
         $it['addons'] = $addonsByItem[$iid] ?? [];

@@ -112,6 +112,8 @@ export interface MenuItem {
   description?: string | null;
   price: number;
   unit: string;
+  /** Menu display order, for e.g. "goes well with" tie-breaks within a category. */
+  sort_order: number;
   /** Optional explicit image URL; otherwise the SPA derives /menu/{id}.webp. */
   image_url?: string;
   /** Photo URLs in slot order, from the API's directory read. Up to three. */
