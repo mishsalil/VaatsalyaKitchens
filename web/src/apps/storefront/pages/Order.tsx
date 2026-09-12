@@ -7,7 +7,7 @@ import { SkeletonMenu } from '../../shared/components/Skeleton';
 import { MenuCategory } from '../components/MenuCategory';
 import { MenuItemRow } from '../components/MenuItemRow';
 import { CategoryTabs, CategoryRail } from '../components/CategoryTabs';
-import { CartBar } from '../components/CartBar';
+import { CartPanel } from '../components/CartPanel';
 import { PushNudge } from '../../shared/push/PushNudge';
 import { nextOpenForCategory, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
 
@@ -127,24 +127,29 @@ export function Order() {
       ) : menu.error ? (
         <div className="mt-2"><ErrorBox msg={menu.error} /></div>
       ) : q ? (
-        /* Search results — flat, no category grouping. */
-        <div className="mt-4 space-y-3">
-          <p className="px-1 text-sm text-brand-500">
-            {matches.length === 0
-              ? <>No dish matches “<span className="font-semibold text-brand-700">{query}</span>”.</>
-              : <>{matches.length} {matches.length === 1 ? 'dish' : 'dishes'} matching “<span className="font-semibold text-brand-700">{query}</span>”</>}
-          </p>
-          {matches.length > 0 && (
-            <div className="divide-y divide-cream-200 overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card">
-              {matches.map((it) => (
-                <MenuItemRow key={it.id} item={it} unavailableUntil={backAt(it.category_id)} />
-              ))}
-            </div>
-          )}
+        /* Search results — flat, no category grouping. The cart panel stays
+           beside them so it does not vanish while searching. */
+        <div className="mt-4 lg:grid lg:grid-cols-[1fr_20rem] lg:gap-8">
+          <div className="min-w-0 space-y-3">
+            <p className="px-1 text-sm text-brand-500">
+              {matches.length === 0
+                ? <>No dish matches “<span className="font-semibold text-brand-700">{query}</span>”.</>
+                : <>{matches.length} {matches.length === 1 ? 'dish' : 'dishes'} matching “<span className="font-semibold text-brand-700">{query}</span>”</>}
+            </p>
+            {matches.length > 0 && (
+              <div className="divide-y divide-cream-200 overflow-hidden rounded-2xl border border-cream-200 bg-white shadow-card">
+                {matches.map((it) => (
+                  <MenuItemRow key={it.id} item={it} unavailableUntil={backAt(it.category_id)} />
+                ))}
+              </div>
+            )}
+          </div>
+          <CartPanel />
         </div>
       ) : (
-        /* Browse — vertical rail beside the menu from lg up, stacked below. */
-        <div className="mt-2 lg:grid lg:grid-cols-[13rem_1fr] lg:gap-8">
+        /* Browse — rail, menu and the open cart side by side from lg up,
+           stacked (rail only) below. */
+        <div className="mt-2 lg:grid lg:grid-cols-[13rem_1fr_20rem] lg:gap-8">
           <CategoryRail categories={visibleCats} />
           <div className="min-w-0 space-y-2">
             {visibleCats.map((cat) => {
@@ -158,6 +163,7 @@ export function Order() {
               );
             })}
           </div>
+          <CartPanel />
         </div>
       )}
 
@@ -165,9 +171,6 @@ export function Order() {
       <div className="mt-6">
         <PushNudge surface="order" />
       </div>
-
-      {/* Sticky bottom cart bar → opens CartSheet → /checkout */}
-      <CartBar />
     </div>
   );
 }

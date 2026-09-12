@@ -3,6 +3,7 @@ import { Outlet, NavLink, useLocation, Link } from 'react-router-dom';
 import { Home as HomeIcon, UtensilsCrossed, User, LogIn, MapPin } from 'lucide-react';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useCart } from '../../shared/context/CartContext';
+import { CartFab } from '../components/CartFab';
 
 /** The logo alone — it sits in the header's centre column. */
 function Logo() {
@@ -136,6 +137,10 @@ export function CustomerLayout() {
       <main className="flex-1">
         <Outlet key={location.pathname} />
       </main>
+
+      {/* Floating cart button → CartSheet → /checkout. Hides itself when the
+          cart is empty, on /checkout, and at lg+ on /order (CartPanel). */}
+      <CartFab />
 
       {/* Mobile bottom nav */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-cream-200 bg-white/95 pb-safe backdrop-blur sm:hidden">
