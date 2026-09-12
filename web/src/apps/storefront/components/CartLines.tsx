@@ -53,13 +53,16 @@ export function CartLines({ compact }: { compact?: boolean }) {
           );
         }
         return (
-          <li key={l.key} className="flex items-center gap-3 py-4">
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-brand-900">{label}</p>
+          <li key={l.key} className="flex flex-wrap items-start gap-3 py-4">
+            {/* Below sm the name takes the whole first row (a 45-character
+                label next to the md stepper had ~50px, which is unreadable);
+                from sm up it shares the row with the controls. */}
+            <div className="min-w-0 basis-full sm:flex-1">
+              <p className="line-clamp-2 text-sm font-semibold text-brand-900">{label}</p>
               <p className="text-xs text-brand-500">{rupees(unit)} · {l.unit}</p>
             </div>
             {stepper}
-            <span className="w-20 text-right text-sm font-semibold text-brand-900">
+            <span className="ml-auto w-20 text-right text-sm font-semibold text-brand-900 sm:ml-0">
               {rupees(unit * l.qty)}
             </span>
             {remove}
