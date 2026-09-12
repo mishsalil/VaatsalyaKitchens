@@ -20,8 +20,8 @@ $pdo = db();
 const TABLES = [
     'menu_categories'    => ['id', 'name', 'sort_order', 'active'],
     'menu_subcategories' => null,   // columns read at runtime; may be unused
-    'menu_items'         => ['id', 'category_id', 'subcategory_id', 'name', 'price', 'unit', 'available', 'sort_order', 'branch_id'],
-    'menu_item_variants' => ['id', 'item_id', 'name', 'price_delta', 'is_default', 'sort_order'],
+    'menu_items'         => ['id', 'category_id', 'subcategory_id', 'name', 'description', 'price', 'unit', 'available', 'sort_order', 'branch_id'],
+    'menu_item_variants' => ['id', 'item_id', 'group_label', 'name', 'price_delta', 'is_default', 'sort_order'],
     'menu_item_addons'   => ['id', 'item_id', 'name', 'price', 'available', 'sort_order'],
 ];
 

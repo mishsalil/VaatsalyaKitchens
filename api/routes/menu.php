@@ -37,7 +37,7 @@ function route($method, $action, $parts): void
     if ($itemIds) {
         $ph = implode(',', array_fill(0, count($itemIds), '?'));
         $vStmt = $db->prepare(
-            "SELECT id, item_id, name, price_delta, is_default, sort_order
+            "SELECT id, item_id, group_label, name, price_delta, is_default, sort_order
                FROM menu_item_variants WHERE item_id IN ($ph) ORDER BY sort_order, id"
         );
         $vStmt->execute($itemIds);
@@ -46,6 +46,7 @@ function route($method, $action, $parts): void
             $variantsByItem[$iid][] = [
                 'id' => (int)$v['id'],
                 'name' => $v['name'],
+                'group_label' => $v['group_label'],
                 'price_delta' => (float)$v['price_delta'],
                 'is_default' => (int)$v['is_default'] === 1,
                 'sort_order' => (int)$v['sort_order'],

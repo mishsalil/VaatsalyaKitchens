@@ -112,6 +112,7 @@ export const adminOrdersApi = {
 export interface AdminVariantInput {
   id?: number;
   name: string;
+  group_label: string;
   price_delta: number;
   is_default: boolean;
 }

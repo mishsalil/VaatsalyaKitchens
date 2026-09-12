@@ -130,6 +130,8 @@ export interface AdminMenuSubcategory {
 export interface AdminItemVariant {
   id: number;
   name: string;
+  /** Rows sharing a label form one choice (e.g. "Preparation"). */
+  group_label: string;
   /** Signed delta added to the item base price. */
   price_delta: number;
   is_default: boolean;

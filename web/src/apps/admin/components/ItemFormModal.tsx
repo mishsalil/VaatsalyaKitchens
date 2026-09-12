@@ -19,12 +19,15 @@ type Props = {
   defaultCategoryId?: number;
   categories: AdminMenuCategory[];
   subcategories: AdminMenuSubcategory[];
+  /** Every variant group label already in use across the menu, for the Group datalist. */
+  knownGroups: string[];
   onSubmit: (data: AdminItemPayload) => Promise<void>;
 };
 
 interface VariantRow {
   id?: number;
   name: string;
+  group: string;
   delta: string;
   isDefault: boolean;
 }
@@ -36,8 +39,8 @@ interface AddonRow {
 }
 
 /** Add-or-edit modal for a menu item. Validates non-empty name + numeric price,
- *  and optional variants (signed delta, one default) and add-ons (price ≥ 0). */
-export function ItemFormModal({ open, onClose, item, defaultCategoryId, categories, subcategories, onSubmit }: Props) {
+ *  and optional variants (signed delta, one default per group) and add-ons (price ≥ 0). */
+export function ItemFormModal({ open, onClose, item, defaultCategoryId, categories, subcategories, knownGroups, onSubmit }: Props) {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [unit, setUnit] = useState('');
@@ -68,7 +71,7 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
       setSubcategoryId(item.subcategory_id ?? '');
       setVariants(
         item.variants.length
-          ? item.variants.map((v) => ({ id: v.id, name: v.name, delta: String(v.price_delta), isDefault: v.is_default }))
+          ? item.variants.map((v) => ({ id: v.id, name: v.name, group: v.group_label, delta: String(v.price_delta), isDefault: v.is_default }))
           : []
       );
       setAddons(
@@ -98,14 +101,19 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
     if (!subs.some((s) => s.id === subcategoryId)) setSubcategoryId('');
   };
 
+  // A new row joins the last row's group; the default is whichever row the user marks.
   const addVariant = () =>
-    setVariants((prev) => [...prev, { name: '', delta: '0', isDefault: prev.length === 0 }]);
+    setVariants((prev) => [...prev, { name: '', delta: '0', isDefault: false, group: prev[prev.length - 1]?.group ?? 'Preparation' }]);
   const updateVariant = (i: number, patch: Partial<VariantRow>) =>
     setVariants((prev) => prev.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
   const removeVariant = (i: number) =>
     setVariants((prev) => prev.filter((_, idx) => idx !== i));
+  // One default per group: marking row i clears only the rows in its group.
   const setDefaultVariant = (i: number) =>
-    setVariants((prev) => prev.map((v, idx) => ({ ...v, isDefault: idx === i })));
+    setVariants((prev) => {
+      const group = prev[i]?.group;
+      return prev.map((v, idx) => (v.group === group ? { ...v, isDefault: idx === i } : v));
+    });
 
   const addAddon = () => setAddons((prev) => [...prev, { name: '', price: '0', available: true }]);
   const updateAddon = (i: number, patch: Partial<AddonRow>) =>
@@ -147,12 +155,14 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
       .map((v) => ({
         id: v.id,
         name: v.name.trim(),
+        group_label: v.group.trim() || 'Preparation',
         price_delta: v.delta.trim() === '' ? 0 : Number(v.delta.replace(/[^0-9.\-]/g, '')),
         is_default: v.isDefault,
       }));
-    // Guarantee exactly one default when there is at least one variant.
-    if (variantPayload.length > 0 && !variantPayload.some((v) => v.is_default)) {
-      variantPayload[0].is_default = true;
+    // Guarantee one default per group: a group with none gets its first row.
+    for (const group of new Set(variantPayload.map((v) => v.group_label))) {
+      const rows = variantPayload.filter((v) => v.group_label === group);
+      if (!rows.some((v) => v.is_default)) rows[0].is_default = true;
     }
 
     const addonPayload: AdminAddonInput[] = addons
@@ -242,14 +252,17 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
         {/* Variants editor */}
         <div className="rounded-xl border border-cream-200 p-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">Sizes / variants</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">Variants</p>
             <button type="button" onClick={addVariant} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900">
               <Plus className="h-3.5 w-3.5" /> Add variant
             </button>
           </div>
           <p className="mt-1 text-xs text-brand-400">
-            Each variant adds its delta to the base price. Mark one as the default size shown first.
+            Rows with the same group name form one choice (e.g. Preparation: Ghee / Butter). Mark one default per group.
           </p>
+          <datalist id="variant-groups">
+            {[...new Set(knownGroups)].map((g) => <option key={g} value={g} />)}
+          </datalist>
           {variants.length === 0 ? (
             <p className="mt-2 text-xs text-brand-300">No variants — customers order at the base price.</p>
           ) : (
@@ -262,15 +275,23 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
                       never only a phone problem. */}
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="flex w-full items-center gap-2">
-                      <label className="flex shrink-0 items-center gap-1 text-xs text-brand-500" title="Default size">
+                      <label className="flex shrink-0 items-center gap-1 text-xs text-brand-500" title="Default for this group">
                         <input
                           type="radio"
-                          name="variant-default"
+                          name={`variant-default-${v.group}`}
                           checked={v.isDefault}
                           onChange={() => setDefaultVariant(i)}
                           className="accent-brand-900"
                         />
                       </label>
+                      <Input
+                        list="variant-groups"
+                        value={v.group}
+                        maxLength={40}
+                        placeholder="Preparation"
+                        onChange={(e) => updateVariant(i, { group: e.target.value })}
+                        className="w-32"
+                      />
                       <Input
                         value={v.name}
                         invalid={!!variantErrs[i]}

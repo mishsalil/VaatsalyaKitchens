@@ -15,15 +15,19 @@
    POST /api/admin/menu/reorder_subcategories {ids:[...]}
    POST /api/admin/menu/add_item              {category_id,subcategory_id?,name,price,unit,variants[],addons[]} → {id}
    POST /api/admin/menu/update_item/{id}      {name,price,unit,category_id,subcategory_id?,variants[],addons[]}  (full-replace variants & addons)
+                                              variants[i] = {name, group_label?, price_delta, is_default}; group_label defaults to "Preparation"
    POST /api/admin/menu/toggle_item/{id}      {available:0|1}
    POST /api/admin/menu/delete_item/{id}
    POST /api/admin/menu/reorder_items         {ids:[...]}
 
-   Variants carry a signed price_delta added to the item base price; add-ons
-   carry an absolute price. On update_item the variants/addons arrays FULLY
-   REPLACE the existing rows. Prices are validated server-side and stored as
-   DECIMAL; the storefront never trusts client prices. New items get the
-   default branch_id so they appear on /order. */
+   Variants carry a signed price_delta added to the item base price and belong
+   to a group (group_label — rows sharing a label form one choice, one default
+   per group); add-ons carry an absolute price. On update_item the
+   variants/addons arrays FULLY REPLACE the existing rows. The CSV variants
+   cell is "Preparation=Normal:*0|Ghee:+20|Vegetables=With:*0|Without:0".
+   Prices are validated server-side and stored as DECIMAL; the storefront never
+   trusts client prices. New items get the default branch_id so they appear on
+   /order. */
 function route($method, $action, $parts): void
 {
     require_admin_cap('menu');
@@ -57,11 +61,12 @@ function route($method, $action, $parts): void
         $aByItem = [];
         if ($itemIds) {
             $ph = implode(',', array_fill(0, count($itemIds), '?'));
-            $vs = $db->prepare("SELECT id, item_id, name, price_delta, is_default, sort_order FROM menu_item_variants WHERE item_id IN ($ph) ORDER BY sort_order, id");
+            $vs = $db->prepare("SELECT id, item_id, group_label, name, price_delta, is_default, sort_order FROM menu_item_variants WHERE item_id IN ($ph) ORDER BY sort_order, id");
             $vs->execute($itemIds);
             foreach ($vs->fetchAll() as $v) {
                 $vByItem[(int)$v['item_id']][] = [
                     'id' => (int)$v['id'], 'name' => $v['name'],
+                    'group_label' => $v['group_label'],
                     'price_delta' => (float)$v['price_delta'],
                     'is_default' => (int)$v['is_default'] === 1,
                     'sort_order' => (int)$v['sort_order'],
@@ -96,7 +101,8 @@ function route($method, $action, $parts): void
         Response::json(['categories' => $cats, 'subcategories' => $subcats, 'items' => $items]);
     }
 
-    // --- export the menu as CSV (category,subcategory,item,price,unit,available,variants,addons) ---
+    // --- export the menu as CSV (category,subcategory,item,price,unit,available,variants,addons);
+    //     variants = "Group=Name:*delta|Name:delta|…" (see format_variants_cell) ---
     if ($action === 'export' && $method === 'GET') {
         $rows = $db->query(
             'SELECT mi.id, mc.name AS category, ms.name AS subcategory, mi.name AS item,
@@ -111,10 +117,10 @@ function route($method, $action, $parts): void
         $aByItem = [];
         if ($ids) {
             $ph = implode(',', array_fill(0, count($ids), '?'));
-            $vs = $db->prepare("SELECT item_id, name, price_delta, is_default FROM menu_item_variants WHERE item_id IN ($ph) ORDER BY sort_order, id");
+            $vs = $db->prepare("SELECT item_id, group_label, name, price_delta, is_default FROM menu_item_variants WHERE item_id IN ($ph) ORDER BY sort_order, id");
             $vs->execute($ids);
             foreach ($vs->fetchAll() as $v) {
-                $vByItem[(int)$v['item_id']][] = ['name' => $v['name'], 'price_delta' => $v['price_delta'], 'is_default' => (int)$v['is_default'] === 1];
+                $vByItem[(int)$v['item_id']][] = ['group_label' => $v['group_label'], 'name' => $v['name'], 'price_delta' => $v['price_delta'], 'is_default' => (int)$v['is_default'] === 1];
             }
             $as = $db->prepare("SELECT item_id, name, price FROM menu_item_addons WHERE item_id IN ($ph) ORDER BY sort_order, id");
             $as->execute($ids);
@@ -597,7 +603,8 @@ function normalize_subcategory_id($v, int $categoryId): ?int
 
 /**
  * Full-replace an item's variants and add-ons. Empty-name rows are dropped.
- * Variant is_default is normalized so at most one row is default (first marked).
+ * Variants belong to a group (group_label, default "Preparation"); is_default
+ * is normalized so at most one row per group is default (first marked).
  * sort_order follows the array index.
  */
 function save_item_options($db, int $itemId, $variants, $addons): void
@@ -606,23 +613,27 @@ function save_item_options($db, int $itemId, $variants, $addons): void
     $db->prepare('DELETE FROM menu_item_addons WHERE item_id = ?')->execute([$itemId]);
 
     $insV = $db->prepare(
-        'INSERT INTO menu_item_variants (item_id, name, price_delta, is_default, sort_order) VALUES (?, ?, ?, ?, ?)'
+        'INSERT INTO menu_item_variants (item_id, group_label, name, price_delta, is_default, sort_order) VALUES (?, ?, ?, ?, ?, ?)'
     );
-    $seenDefault = false;
+    $seenDefault = [];          // group_label => true once a default is written
     foreach (($variants ?? []) as $i => $v) {
         $name = mb_substr(trim((string)($v['name'] ?? '')), 0, 80);
         if ($name === '') {
             continue;
         }
+        $group = mb_substr(trim((string)($v['group_label'] ?? '')), 0, 40);
+        if ($group === '') {
+            $group = 'Preparation';
+        }
         $delta = parse_delta($v['price_delta'] ?? 0);
         if ($delta === null) {
             $delta = 0.0;
         }
-        $isDefault = !$seenDefault && !empty($v['is_default']);
+        $isDefault = empty($seenDefault[$group]) && !empty($v['is_default']);
         if ($isDefault) {
-            $seenDefault = true;
+            $seenDefault[$group] = true;
         }
-        $insV->execute([$itemId, $name, $delta, $isDefault ? 1 : 0, (int)$i]);
+        $insV->execute([$itemId, $group, $name, $delta, $isDefault ? 1 : 0, (int)$i]);
     }
 
     $insA = $db->prepare(
@@ -695,16 +706,30 @@ function parse_yes_no($v, bool $default = true): bool
     return in_array($s, ['yes', 'y', '1', 'true', 't', 'available'], true);
 }
 
-/** variants cell → [{name, price_delta(string), is_default}, ...]. Format: "Half:-70|Full:*+150". */
+/** variants cell → [{group_label, name, price_delta(string), is_default}, ...].
+ *  Format: "Preparation=Half:-70|Full:*+150|Vegetables=With:*0|Without:0" — a
+ *  "Label=" prefix starts a new group; segments without one continue the
+ *  current group; the first group defaults to "Preparation". */
 function parse_variants_cell(string $cell): array
 {
     $out = [];
+    $group = 'Preparation';
     foreach (explode('|', $cell) as $seg) {
         $seg = trim($seg);
         if ($seg === '') {
             continue;
         }
+        $eq = strpos($seg, '=');
         $colon = strpos($seg, ':');
+        if ($eq !== false && ($colon === false || $eq < $colon)) {
+            [$label, $seg] = explode('=', $seg, 2);
+            $label = trim($label);
+            $seg = trim($seg);
+            if ($label !== '') {
+                $group = $label;
+            }
+            $colon = strpos($seg, ':');
+        }
         if ($colon === false) {
             $name = $seg;
             $deltaStr = '0';
@@ -720,7 +745,7 @@ function parse_variants_cell(string $cell): array
             $isDefault = true;
             $deltaStr = substr($deltaStr, 1);
         }
-        $out[] = ['name' => $name, 'price_delta' => $deltaStr, 'is_default' => $isDefault];
+        $out[] = ['group_label' => $group, 'name' => $name, 'price_delta' => $deltaStr, 'is_default' => $isDefault];
     }
     return $out;
 }
@@ -750,14 +775,22 @@ function parse_addons_cell(string $cell): array
     return $out;
 }
 
-/** Inverse of parse_variants_cell for CSV export. */
+/** Inverse of parse_variants_cell for CSV export. Every group change (including
+ *  the first) is written as a "Label=" prefix, so a Preparation-only item reads
+ *  "Preparation=Half:-70|Full:*+150". */
 function format_variants_cell(array $variants): string
 {
     $segs = [];
+    $cur = null;
     foreach ($variants as $v) {
         $delta = (float)$v['price_delta'];
         $sign = $delta >= 0 ? '+' : '';
-        $segs[] = $v['name'] . ':' . ($v['is_default'] ? '*' : '') . $sign . $delta;
+        $seg = $v['name'] . ':' . ($v['is_default'] ? '*' : '') . $sign . $delta;
+        if ($v['group_label'] !== $cur) {
+            $cur = $v['group_label'];
+            $seg = $cur . '=' . $seg;
+        }
+        $segs[] = $seg;
     }
     return implode('|', $segs);
 }

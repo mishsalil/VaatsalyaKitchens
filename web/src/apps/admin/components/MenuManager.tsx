@@ -662,6 +662,7 @@ export function MenuManager() {
         defaultCategoryId={itemModal?.categoryId}
         categories={sortedCats}
         subcategories={subcategories}
+        knownGroups={items.flatMap((it) => it.variants.map((v) => v.group_label))}
         onClose={() => setItemModal(null)}
         onSubmit={submitItem}
       />
