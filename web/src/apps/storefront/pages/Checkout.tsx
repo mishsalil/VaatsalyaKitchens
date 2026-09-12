@@ -75,11 +75,14 @@ export function Checkout() {
   }, [addresses.data]);
 
   // Preselect the first slot once hours arrive (unconfigured hours resolve immediately).
+  // Gated on the menu having loaded so this doesn't seed a day off the default
+  // 08:00-22:00 hours before the kitchen's real hours come in.
   useEffect(() => {
+    if (!menu.data) return;
     if (date) return;
     const f = firstAvailable(hours, new Date());
     if (f) { setDate(f.date); setTime(f.time); }
-  }, [hours, date]);
+  }, [menu.data, hours, date]);
   const whenLocal = date && time ? toLocalValue(date, time) : '';
   const pickDate = (d: string) => {
     setDate(d); setWhenErr('');
