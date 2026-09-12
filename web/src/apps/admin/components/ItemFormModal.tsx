@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Modal } from '../../shared/components/ui/Modal';
 import { Field } from '../../shared/components/ui/Field';
-import { Input, Select } from '../../shared/components/ui/Input';
+import { Input, Select, Textarea } from '../../shared/components/ui/Input';
 import { Button } from '../../shared/components/ui/Button';
 import { FormError } from '../../shared/components/ui/FormError';
 import { rupees } from '../../shared/lib/format';
@@ -209,11 +209,12 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
             <Input id="item-unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="per plate" />
           </Field>
         </div>
-        <Field label="Description" htmlFor="item-desc" hint={`one line under the name · ${160 - description.length} left`}>
-          <Input
+        <Field label="Description" htmlFor="item-desc" hint={`shown under the name, clamped to two lines on the menu · ${500 - description.length} left`}>
+          <Textarea
             id="item-desc"
+            rows={3}
             value={description}
-            maxLength={160}
+            maxLength={500}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Cottage cheese in a rich tomato-butter gravy, mildly spiced"
           />

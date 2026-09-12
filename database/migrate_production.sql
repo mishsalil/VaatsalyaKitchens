@@ -476,7 +476,7 @@ ON DUPLICATE KEY UPDATE `key` = `key`;
 
 
 -- --- migration_014: one-line dish descriptions -----------------------------
-SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE menu_items ADD COLUMN description VARCHAR(160) NULL AFTER name')
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE menu_items ADD COLUMN description VARCHAR(500) NULL AFTER name')
   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='menu_items' AND COLUMN_NAME='description');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 

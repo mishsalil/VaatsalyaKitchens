@@ -162,7 +162,7 @@ CREATE TABLE menu_items (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   category_id INT UNSIGNED NOT NULL,
   name        VARCHAR(160) NOT NULL,
-  description VARCHAR(160) NULL,
+  description VARCHAR(500) NULL,
   price       DECIMAL(10,2) NOT NULL,
   unit        VARCHAR(60) NOT NULL DEFAULT '',
   available   TINYINT(1) NOT NULL DEFAULT 1,

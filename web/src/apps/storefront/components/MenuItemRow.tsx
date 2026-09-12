@@ -56,12 +56,16 @@ export function MenuItemRow({
           <p className="font-semibold text-brand-900">{item.name}</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-brand-500">
             <span>{priceLabel}</span>
-            <span className="text-brand-300">·</span>
-            <span>{item.unit}</span>
+            {item.unit && (
+              <>
+                <span className="text-brand-300">·</span>
+                <span>{item.unit}</span>
+              </>
+            )}
           </p>
           {/* The kitchen's own line about the dish, when it has written one;
               nothing otherwise. A generic tagline on every row said nothing. */}
-          {item.description && <p className="mt-1 text-xs text-brand-500">{item.description}</p>}
+          {item.description && <p className="mt-1 line-clamp-2 text-xs text-brand-500">{item.description}</p>}
           {hasOptions && (
             <p className="mt-1 text-xs font-medium text-brand-600">
               {item.variants.length > 0 && `${item.variants.length} size${item.variants.length > 1 ? 's' : ''}`}
