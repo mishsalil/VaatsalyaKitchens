@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Clock } from 'lucide-react';
 import type { MenuItem } from '../../shared/types';
 import { useCart } from '../../shared/context/CartContext';
@@ -6,6 +6,7 @@ import { rupees } from '../../shared/lib/format';
 import { DishImage } from '../../shared/components/ui/DishImage';
 import { Stepper } from '../../shared/components/ui/Stepper';
 import { ItemPickerModal } from './ItemPickerModal';
+import { DishDetailModal } from './DishDetailModal';
 
 /**
  * Zomato-style menu-item card: left text block (name, unit, price, a gold
@@ -31,6 +32,17 @@ export function MenuItemRow({
   const { qtyOfItem, add, setQty, lastLineOfItem } = useCart();
   const qty = qtyOfItem(item.id);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const descRef = useRef<HTMLSpanElement>(null);
+  const [clamped, setClamped] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  useEffect(() => {
+    const el = descRef.current;
+    if (!el) return;
+    const measure = () => setClamped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [item.description]);
 
   const hasOptions = item.variants.length > 0 || item.addons.length > 0;
   const groupCount = new Set(item.variants.map((v) => v.group_label)).size;
@@ -66,7 +78,14 @@ export function MenuItemRow({
           </p>
           {/* The kitchen's own line about the dish, when it has written one;
               nothing otherwise. A generic tagline on every row said nothing. */}
-          {item.description && <p className="mt-1 line-clamp-2 text-xs text-brand-500">{item.description}</p>}
+          {item.description && (
+            <p className="mt-1 text-xs text-brand-500">
+              <span ref={descRef} className="line-clamp-2 sm:line-clamp-none">{item.description}</span>
+              {clamped && (
+                <button type="button" onClick={() => setDetailOpen(true)} className="font-semibold text-brand-700 sm:hidden">…See more</button>
+              )}
+            </p>
+          )}
           {hasOptions && (
             <p className="mt-1 text-xs font-medium text-brand-600">
               {groupCount > 0 && `${groupCount} choice${groupCount > 1 ? 's' : ''}`}
@@ -105,6 +124,7 @@ export function MenuItemRow({
         </div>
       </div>
       {hasOptions && <ItemPickerModal item={item} open={pickerOpen} onClose={() => setPickerOpen(false)} />}
+      <DishDetailModal item={item} open={detailOpen} onClose={() => setDetailOpen(false)} unavailableUntil={unavailableUntil} />
     </>
   );
 }
