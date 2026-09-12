@@ -18,7 +18,7 @@ import { kitchenOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hour
 import { AddressPicker, type AddressPayload } from '../components/AddressPicker';
 import { BillDetails, type BillItem } from '../components/BillDetails';
 import { computeGst } from '../../shared/lib/gst';
-import { lineLabel, linePrice } from '../../shared/types';
+import { lineLabel, linePrice, variantsText } from '../../shared/types';
 import { PushNudge } from '../../shared/push/PushNudge';
 
 /**
@@ -73,7 +73,7 @@ export function Checkout() {
   }
 
   const billItems: BillItem[] = lines.map((l) => ({
-    name: lineLabel(l.name, l.variant?.name, l.addons.map((a) => a.name).join(', ') || undefined),
+    name: lineLabel(l.name, variantsText(l.variants), l.addons.map((a) => a.name).join(', ') || undefined),
     qty: l.qty,
     unit: l.unit,
     price: linePrice(l),
@@ -124,7 +124,7 @@ export function Checkout() {
         items: lines.map((l) => ({
           id: l.id,
           qty: l.qty,
-          variant_id: l.variant?.id,
+          variant_ids: l.variants.map((v) => v.id),
           addon_ids: l.addons.map((a) => a.id),
         })),
       };

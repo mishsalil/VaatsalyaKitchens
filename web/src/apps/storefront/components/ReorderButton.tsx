@@ -3,14 +3,14 @@ import { RotateCcw } from 'lucide-react';
 import { useCart } from '../../shared/context/CartContext';
 import { useToast } from '../../shared/context/ToastContext';
 import { menuApi } from '../../shared/api/endpoints';
-import type { OrderListItem } from '../../shared/types';
+import { groupVariants, type OrderListItem } from '../../shared/types';
 
 /**
  * Hydrate the cart from a past order, then send the user to /order. Menu item
  * names are re-checked against the live menu so a discontinued dish is skipped
- * (with a toast). The variant and add-ons are best-effort restored by matching
- * the snapshotted names against the live item's variants/add-ons; if a name no
- * longer matches, the line is added with the item's default configuration.
+ * (with a toast). The variants and add-ons are best-effort restored by matching
+ * the snapshotted names against the live item's variants/add-ons; a variant
+ * group whose name no longer matches falls back to that group's default.
  */
 export function ReorderButton({ order }: { order: OrderListItem }) {
   const navigate = useNavigate();
@@ -29,9 +29,11 @@ export function ReorderButton({ order }: { order: OrderListItem }) {
           skipped += it.qty;
           continue;
         }
-        const variant = it.variant_name
-          ? match.variants.find((v) => v.name === it.variant_name) ?? null
-          : undefined;
+        const groups = groupVariants(match.variants);
+        const wanted = it.variant_name ? it.variant_name.split(',').map((s) => s.trim()) : [];
+        const variants = groups
+          .map((g) => g.options.find((o) => wanted.includes(o.name)) ?? g.options.find((o) => o.id === g.defaultId)!)
+          .map((v) => ({ id: v.id, name: v.name, priceDelta: v.price_delta }));
         const addonNames = it.addons_text ? it.addons_text.split(',').map((s) => s.trim()) : [];
         const addons = match.addons.filter((a) => addonNames.includes(a.name)).map((a) => ({ id: a.id, name: a.name, price: a.price }));
         for (let i = 0; i < it.qty; i++) {
@@ -40,7 +42,7 @@ export function ReorderButton({ order }: { order: OrderListItem }) {
             name: match.name,
             unit: match.unit,
             basePrice: match.price,
-            variant: variant ? { id: variant.id, name: variant.name, priceDelta: variant.price_delta } : undefined,
+            variants,
             addons,
             qty: 1,
           });

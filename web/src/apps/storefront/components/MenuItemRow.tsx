@@ -33,6 +33,7 @@ export function MenuItemRow({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const hasOptions = item.variants.length > 0 || item.addons.length > 0;
+  const groupCount = new Set(item.variants.map((v) => v.group_label)).size;
   const from = item.price;
   const priceLabel = hasOptions ? `from ${rupees(from)}` : rupees(from);
 
@@ -68,7 +69,7 @@ export function MenuItemRow({
           {item.description && <p className="mt-1 line-clamp-2 text-xs text-brand-500">{item.description}</p>}
           {hasOptions && (
             <p className="mt-1 text-xs font-medium text-brand-600">
-              {item.variants.length > 0 && `${item.variants.length} size${item.variants.length > 1 ? 's' : ''}`}
+              {groupCount > 0 && `${groupCount} choice${groupCount > 1 ? 's' : ''}`}
               {item.variants.length > 0 && item.addons.length > 0 ? ' · ' : ''}
               {item.addons.length > 0 && `${item.addons.length} add-on${item.addons.length > 1 ? 's' : ''} available`}
             </p>

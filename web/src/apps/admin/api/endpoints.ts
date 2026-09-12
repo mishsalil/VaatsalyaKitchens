@@ -45,7 +45,7 @@ export const adminAuthApi = {
 export interface AdminNewOrderLine {
   id: number;
   qty: number;
-  variant_id?: number;
+  variant_ids?: number[];
   addon_ids?: number[];
 }
 

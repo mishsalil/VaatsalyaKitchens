@@ -1,7 +1,7 @@
 import { Trash2 } from 'lucide-react';
 import { useCart } from '../../shared/context/CartContext';
 import { rupees } from '../../shared/lib/format';
-import { lineLabel, linePrice } from '../../shared/types';
+import { lineLabel, linePrice, variantsText } from '../../shared/types';
 
 export function OrderSummary() {
   const { lines, total, setQty } = useCart();
@@ -21,7 +21,7 @@ export function OrderSummary() {
           return (
             <li key={l.key} className="flex items-center justify-between gap-2 text-brand-800">
               <span className="flex-1">
-                {lineLabel(l.name, l.variant?.name, l.addons.map((a) => a.name).join(', ') || undefined)}{' '}
+                {lineLabel(l.name, variantsText(l.variants), l.addons.map((a) => a.name).join(', ') || undefined)}{' '}
                 <span className="text-brand-400">×{l.qty}</span>
                 {l.unit ? <span className="ml-1 text-sm text-brand-400">({l.unit})</span> : null}
               </span>

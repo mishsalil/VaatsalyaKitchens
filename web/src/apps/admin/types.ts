@@ -221,6 +221,8 @@ export interface AdminSettingsResponse {
 export interface AdminOrderItem extends OrderItem {
   menu_item_id: number | null;
   variant_id: number | null;
+  /** One id per variant group; falls back to [variant_id] on pre-group orders, else []. */
+  variant_ids: number[];
   addon_ids: number[];
 }
 

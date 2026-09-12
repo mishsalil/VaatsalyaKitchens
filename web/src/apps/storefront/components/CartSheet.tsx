@@ -6,7 +6,7 @@ import { useCart } from '../../shared/context/CartContext';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { rupees } from '../../shared/lib/format';
 import { computeGst } from '../../shared/lib/gst';
-import { lineLabel, linePrice } from '../../shared/types';
+import { lineLabel, linePrice, variantsText } from '../../shared/types';
 
 /**
  * The cart contents as a bottom-sheet (mobile) / right-drawer (desktop).
@@ -91,7 +91,7 @@ export function CartSheet({ open, onClose }: { open: boolean; onClose: () => voi
               <li key={l.key} className="flex items-center gap-3 py-4">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-brand-900">
-                    {lineLabel(l.name, l.variant?.name, l.addons.map((a) => a.name).join(', ') || undefined)}
+                    {lineLabel(l.name, variantsText(l.variants), l.addons.map((a) => a.name).join(', ') || undefined)}
                   </p>
                   <p className="text-xs text-brand-500">{rupees(unit)} · {l.unit}</p>
                 </div>

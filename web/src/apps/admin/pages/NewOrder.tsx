@@ -7,7 +7,7 @@ import { adminOrdersApi, type AdminNewOrderLine } from '../api/endpoints';
 import { menuApi } from '../../shared/api/endpoints';
 import { computeOrderTotal } from '../../shared/lib/gst';
 import { defaultNeededOnLocal, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
-import { cartKey, type MenuItem } from '../../shared/types';
+import { cartKey, groupVariants, variantsText, type MenuItem } from '../../shared/types';
 import { kitchenOpenAt, categoryOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
 import { Button } from '../../shared/components/ui/Button';
 import { CustomerSuggest } from '../components/CustomerSuggest';
@@ -24,9 +24,11 @@ import { documentsFor } from '../components/PrinterBar';
  * Everything lives on one screen: customer, menu, cart, billing, save. No steps,
  * no modals, no routing mid-order. One tap on a tile puts the dish in the cart;
  * tapping again increments it. Items with variants are FLATTENED into one tile
- * per variant ("Masala Dosa · Butter") so a rep who knows the menu never opens a
- * picker — the trade is a longer grid for zero interaction depth, which is why
- * the search box above the grid matters.
+ * per option of the FIRST variant group ("Masala Dosa · Butter") so a rep who
+ * knows the menu never opens a picker — the trade is a longer grid for zero
+ * interaction depth, which is why the search box above the grid matters. Any
+ * further groups are preselected to their default and switchable on the cart
+ * line, exactly like add-ons.
  *
  * Add-ons stay off the fast path too: a tile always adds the plain dish, and
  * add-ons appear as toggle chips ON THE CART LINE afterwards. Nothing blocks the
@@ -37,8 +39,9 @@ import { documentsFor } from '../components/PrinterBar';
 interface Tile {
   key: string;
   itemId: number;
-  variantId: number;
-  variantName: string | null;
+  /** One id per variant group: the tile's own option first, then each later group's default. */
+  variantIds: number[];
+  variantLabel: string | null;
   label: string;
   price: number;
   categoryId: number;
@@ -46,9 +49,8 @@ interface Tile {
 
 interface CartEntry {
   itemId: number;
-  /** 0 = the item has no variants. */
-  variantId: number;
-  variantName: string | null;
+  /** One id per variant group; [] = the item has no variants. */
+  variantIds: number[];
   addonIds: number[];
   qty: number;
 }
@@ -172,29 +174,31 @@ export function AdminNewOrder() {
     return m;
   }, [menu.data]);
 
-  // Flatten menu → tiles (one per variant), keeping category order from the API.
+  // Flatten menu → tiles (one per option of the first group), keeping category order from the API.
   const { tiles, categories } = useMemo(() => {
     const items = menu.data?.items ?? [];
     const cats = menu.data?.categories ?? [];
     const out: Tile[] = [];
     for (const it of items) {
-      if (it.variants.length > 0) {
-        for (const v of it.variants) {
+      const groups = groupVariants(it.variants);
+      if (groups.length === 0) {
+        out.push({
+          key: `${it.id}:0`, itemId: it.id, variantIds: [], variantLabel: null,
+          label: it.name, price: it.price, categoryId: it.category_id,
+        });
+      } else {
+        const rest = groups.slice(1).map((g) => g.options.find((o) => o.id === g.defaultId)!);
+        for (const o of groups[0].options) {
           out.push({
-            key: `${it.id}:${v.id}`,
+            key: `${it.id}:${o.id}`,
             itemId: it.id,
-            variantId: v.id,
-            variantName: v.name,
-            label: `${it.name} · ${v.name}`,
-            price: it.price + v.price_delta,
+            variantIds: [o.id, ...rest.map((r) => r.id)],
+            variantLabel: o.name,
+            label: `${it.name} · ${o.name}`,
+            price: it.price + o.price_delta + rest.reduce((s, r) => s + r.price_delta, 0),
             categoryId: it.category_id,
           });
         }
-      } else {
-        out.push({
-          key: `${it.id}:0`, itemId: it.id, variantId: 0, variantName: null,
-          label: it.name, price: it.price, categoryId: it.category_id,
-        });
       }
     }
     return { tiles: out, categories: cats };
@@ -232,28 +236,25 @@ export function AdminNewOrder() {
         let unresolved = 0;
         for (const line of order.items) {
           let itemId = line.menu_item_id;
-          let variantId = line.variant_id ?? 0;
+          let variantIds = line.variant_ids ?? [];
           let addonIds = line.addon_ids ?? [];
           if (!itemId) {
             const match = (menu.data?.items ?? []).find((m) => m.name === line.item_name);
             if (!match) { unresolved++; continue; }
             itemId = match.id;
-            variantId = line.variant_name
-              ? match.variants.find((v) => v.name === line.variant_name)?.id ?? 0
-              : 0;
+            // Same name-matching as ReorderButton: one option per group, the
+            // group's default when the snapshotted name no longer matches.
+            const wanted = line.variant_name ? line.variant_name.split(',').map((s) => s.trim()) : [];
+            variantIds = groupVariants(match.variants).map(
+              (g) => (g.options.find((o) => wanted.includes(o.name)) ?? g.options.find((o) => o.id === g.defaultId)!).id,
+            );
             const names = line.addons_text ? line.addons_text.split(',').map((s) => s.trim()) : [];
             addonIds = match.addons.filter((a) => names.includes(a.name)).map((a) => a.id);
           }
           const item = itemById.get(itemId);
           if (!item) { unresolved++; continue; }
-          const key = cartKey(itemId, variantId || undefined, addonIds);
-          next[key] = {
-            itemId,
-            variantId,
-            variantName: item.variants.find((v) => v.id === variantId)?.name ?? null,
-            addonIds,
-            qty: line.qty,
-          };
+          const key = cartKey(itemId, variantIds, addonIds);
+          next[key] = { itemId, variantIds, addonIds, qty: line.qty };
         }
         setCart(next);
         if (unresolved > 0) {
@@ -339,22 +340,22 @@ export function AdminNewOrder() {
     if (c.address_text) setAddress((prev) => (prev.trim() === '' ? c.address_text ?? '' : prev));
   };
 
-  /** Unit price = base + variant delta + selected add-ons. */
+  /** Unit price = base + chosen variant deltas + selected add-ons. */
   const entryPrice = (e: CartEntry): number => {
     const item = itemById.get(e.itemId);
     if (!item) return 0;
-    const variant = item.variants.find((v) => v.id === e.variantId);
+    const variants = item.variants.filter((v) => e.variantIds.includes(v.id));
     const addons = item.addons.filter((a) => e.addonIds.includes(a.id));
-    return item.price + (variant?.price_delta ?? 0) + addons.reduce((s, a) => s + a.price, 0);
+    return item.price + variants.reduce((s, v) => s + v.price_delta, 0) + addons.reduce((s, a) => s + a.price, 0);
   };
 
   const addTile = (t: Tile) => {
-    const key = cartKey(t.itemId, t.variantId || undefined, []);
+    const key = cartKey(t.itemId, t.variantIds, []);
     setCart((prev) => ({
       ...prev,
       [key]: prev[key]
         ? { ...prev[key], qty: prev[key].qty + 1 }
-        : { itemId: t.itemId, variantId: t.variantId, variantName: t.variantName, addonIds: [], qty: 1 },
+        : { itemId: t.itemId, variantIds: t.variantIds, addonIds: [], qty: 1 },
     }));
   };
 
@@ -377,12 +378,32 @@ export function AdminNewOrder() {
       const nextAddons = e.addonIds.includes(addonId)
         ? e.addonIds.filter((a) => a !== addonId)
         : [...e.addonIds, addonId].sort((a, b) => a - b);
-      const nextKey = cartKey(e.itemId, e.variantId || undefined, nextAddons);
+      const nextKey = cartKey(e.itemId, e.variantIds, nextAddons);
       const next = { ...prev };
       delete next[key];
       next[nextKey] = next[nextKey]
         ? { ...next[nextKey], qty: next[nextKey].qty + e.qty }
         : { ...e, addonIds: nextAddons };
+      return next;
+    });
+
+  /** Switch one variant group's choice on a cart line, re-keying it (and merging on collision). */
+  const setVariant = (key: string, groupLabel: string, variantId: number) =>
+    setCart((prev) => {
+      const e = prev[key];
+      const item = itemById.get(e?.itemId ?? 0);
+      if (!e || !item) return prev;
+      const groupIds = item.variants.filter((v) => v.group_label === groupLabel).map((v) => v.id);
+      // Replace in place so variantIds[0] stays the primary (tile) option.
+      const nextIds = e.variantIds.some((id) => groupIds.includes(id))
+        ? e.variantIds.map((id) => (groupIds.includes(id) ? variantId : id))
+        : [...e.variantIds, variantId];
+      const nextKey = cartKey(e.itemId, nextIds, e.addonIds);
+      const next = { ...prev };
+      delete next[key];
+      next[nextKey] = next[nextKey]
+        ? { ...next[nextKey], qty: next[nextKey].qty + e.qty }
+        : { ...e, variantIds: nextIds };
       return next;
     });
 
@@ -486,7 +507,7 @@ export function AdminNewOrder() {
     const items: AdminNewOrderLine[] = lines.map(({ entry }) => ({
       id: entry.itemId,
       qty: entry.qty,
-      ...(entry.variantId ? { variant_id: entry.variantId } : {}),
+      ...(entry.variantIds.length ? { variant_ids: entry.variantIds } : {}),
       ...(entry.addonIds.length ? { addon_ids: entry.addonIds } : {}),
     }));
 
@@ -705,13 +726,16 @@ export function AdminNewOrder() {
               <ul className="mt-3 divide-y divide-cream-200">
                 {lines.map(({ key, entry, price }) => {
                   const item = itemById.get(entry.itemId);
+                  const chosenText = variantsText(item?.variants.filter((v) => entry.variantIds.includes(v.id)) ?? []);
+                  // The first group is decided by the tile; every later group is switchable here.
+                  const laterGroups = item ? groupVariants(item.variants).slice(1) : [];
                   return (
                     <li key={key} className="py-2">
                       <div className="flex items-center gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-brand-900">
                             {item?.name}
-                            {entry.variantName && <span className="text-brand-500"> · {entry.variantName}</span>}
+                            {chosenText && <span className="text-brand-500"> · {chosenText}</span>}
                           </p>
                           <p className="text-xs text-brand-500">{rupees(price * entry.qty)}</p>
                         </div>
@@ -741,6 +765,30 @@ export function AdminNewOrder() {
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
+
+                      {/* Later variant groups: one chip row per group, same idea as add-ons. */}
+                      {laterGroups.map((g) => (
+                        <div key={g.label} className="mt-1.5 flex flex-wrap items-center gap-1">
+                          <span className="text-[11px] text-brand-400">{g.label}:</span>
+                          {g.options.map((o) => {
+                            const on = entry.variantIds.includes(o.id);
+                            return (
+                              <button
+                                key={o.id}
+                                type="button"
+                                onClick={() => setVariant(key, g.label, o.id)}
+                                className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                                  on
+                                    ? 'border-brand-900 bg-brand-900 text-cream-50'
+                                    : 'border-cream-300 bg-white text-brand-600 hover:border-brand-300'
+                                }`}
+                              >
+                                {o.name}{o.price_delta ? ` ${o.price_delta > 0 ? '+' : '−'}${rupees(Math.abs(o.price_delta))}` : ''}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
 
                       {/* Add-ons: chips on the line, so the tile tap is never blocked. */}
                       {item && item.addons.length > 0 && (
@@ -863,11 +911,12 @@ function TileGrid({
   cart: Record<string, CartEntry>;
   onAdd: (t: Tile) => void;
 }) {
-  // A tile's badge counts every cart line for that item+variant, whatever
-  // add-ons were later toggled onto it.
+  // A tile's badge counts every cart line for that item + primary option (the
+  // tile's own, variantIds[0]), whatever later-group chips or add-ons were
+  // toggled onto it afterwards. Both are undefined for a no-variant item.
   const countFor = (t: Tile) =>
     Object.values(cart).reduce(
-      (n, e) => (e.itemId === t.itemId && e.variantId === t.variantId ? n + e.qty : n),
+      (n, e) => (e.itemId === t.itemId && e.variantIds[0] === t.variantIds[0] ? n + e.qty : n),
       0,
     );
 

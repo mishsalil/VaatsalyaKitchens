@@ -4,40 +4,37 @@ import { Modal } from '../../shared/components/ui/Modal';
 import { Button } from '../../shared/components/ui/Button';
 import { useCart } from '../../shared/context/CartContext';
 import { rupees } from '../../shared/lib/format';
-import type { MenuItem } from '../../shared/types';
+import { groupVariants, type MenuItem } from '../../shared/types';
 
 /**
- * Configure-and-add modal for items that have variants (pick one — radio) and/or
- * add-ons (tick any — checkboxes). Items with neither never open this modal.
- * The charged unit price = base + chosen variant delta + sum of chosen add-on
- * prices; the server re-reads all of these authoritatively on order create.
+ * Configure-and-add modal for items that have variant groups (pick one per
+ * group — radios) and/or add-ons (tick any — checkboxes). Items with neither
+ * never open this modal. The charged unit price = base + sum of chosen variant
+ * deltas + sum of chosen add-on prices; the server re-reads all of these
+ * authoritatively on order create.
  */
 export function ItemPickerModal({ item, open, onClose }: { item: MenuItem; open: boolean; onClose: () => void }) {
   const { add } = useCart();
-  const hasVariants = item.variants.length > 0;
   const hasAddons = item.addons.length > 0;
 
-  const defaultVariantId = useMemo(() => {
-    const def = item.variants.find((v) => v.is_default);
-    return def ? def.id : (item.variants[0]?.id ?? 0);
-  }, [item.variants]);
-
-  const [variantId, setVariantId] = useState<number>(defaultVariantId);
+  const groups = useMemo(() => groupVariants(item.variants), [item.variants]);
+  // group label → chosen variant id
+  const [choice, setChoice] = useState<Record<string, number>>({});
   const [addonIds, setAddonIds] = useState<number[]>([]);
 
   // Reset selections whenever a different item is opened.
   useEffect(() => {
     if (open) {
-      setVariantId(defaultVariantId);
+      setChoice(Object.fromEntries(groups.map((g) => [g.label, g.defaultId])));
       setAddonIds([]);
     }
-  }, [open, item.id, defaultVariantId]);
+  }, [open, item.id, groups]);
 
-  const chosenVariant = item.variants.find((v) => v.id === variantId) ?? null;
+  const chosenVariants = groups.map((g) => g.options.find((o) => o.id === choice[g.label]) ?? g.options[0]);
   const chosenAddons = item.addons.filter((a) => addonIds.includes(a.id));
   const unitPrice =
     item.price +
-    (chosenVariant?.price_delta ?? 0) +
+    chosenVariants.reduce((s, v) => s + v.price_delta, 0) +
     chosenAddons.reduce((s, a) => s + a.price, 0);
 
   const toggleAddon = (id: number) => {
@@ -50,7 +47,7 @@ export function ItemPickerModal({ item, open, onClose }: { item: MenuItem; open:
       name: item.name,
       unit: item.unit,
       basePrice: item.price,
-      variant: chosenVariant ? { id: chosenVariant.id, name: chosenVariant.name, priceDelta: chosenVariant.price_delta } : undefined,
+      variants: chosenVariants.map((v) => ({ id: v.id, name: v.name, priceDelta: v.price_delta })),
       addons: chosenAddons.map((a) => ({ id: a.id, name: a.name, price: a.price })),
       qty: 1,
     });
@@ -74,17 +71,17 @@ export function ItemPickerModal({ item, open, onClose }: { item: MenuItem; open:
       }
     >
       <div className="space-y-5">
-        {hasVariants && (
-          <fieldset>
-            <legend className="text-xs font-semibold uppercase tracking-wide text-brand-500">Choose size</legend>
+        {groups.map((g) => (
+          <fieldset key={g.label}>
+            <legend className="text-xs font-semibold uppercase tracking-wide text-brand-500">{g.label}</legend>
             <div className="mt-2 space-y-1.5">
-              {item.variants.map((v) => {
-                const checked = v.id === variantId;
+              {g.options.map((o) => {
+                const checked = o.id === choice[g.label];
                 return (
                   <button
-                    key={v.id}
+                    key={o.id}
                     type="button"
-                    onClick={() => setVariantId(v.id)}
+                    onClick={() => setChoice((c) => ({ ...c, [g.label]: o.id }))}
                     className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors ${
                       checked ? 'border-brand-900 bg-brand-50' : 'border-cream-200 bg-white hover:border-brand-300'
                     }`}
@@ -97,18 +94,19 @@ export function ItemPickerModal({ item, open, onClose }: { item: MenuItem; open:
                       >
                         {checked && <span className="h-2 w-2 rounded-full bg-brand-900" />}
                       </span>
-                      <span className="text-sm font-medium text-brand-900">{v.name}</span>
+                      <span className="text-sm font-medium text-brand-900">{o.name}</span>
                     </span>
+                    {/* A signed delta, not an absolute price: with several
+                        groups the option alone does not decide the total. */}
                     <span className="text-sm font-semibold text-brand-700">
-                      {v.price_delta >= 0 ? '+' : ''}
-                      {rupees(item.price + v.price_delta)}
+                      {o.price_delta === 0 ? '' : (o.price_delta > 0 ? '+' : '−') + rupees(Math.abs(o.price_delta))}
                     </span>
                   </button>
                 );
               })}
             </div>
           </fieldset>
-        )}
+        ))}
 
         {hasAddons && (
           <fieldset>
