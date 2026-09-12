@@ -32,7 +32,7 @@ export function Terms() {
 
       <Clause heading="3. Our food">
         <p>
-          We cook home-style vegetarian food to order. Photographs on the menu show the dish as it is usually served
+          We cook vegetarian food fresh to order. Photographs on the menu show the dish as it is usually served
           and are indicative — the exact appearance of a home-cooked dish varies between batches.
         </p>
         <p>

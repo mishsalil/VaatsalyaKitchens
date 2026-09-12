@@ -57,7 +57,7 @@ export function Order() {
   };
 
   return (
-    <div className="container-wide pt-5 pb-32 sm:pb-24">
+    <div className="container-wide pt-5 pb-4">
       {/* Light header */}
       <div className="px-1">
         <h1 className="text-2xl font-bold text-brand-900">Our Menu</h1>
@@ -165,13 +165,6 @@ export function Order() {
       <div className="mt-6">
         <PushNudge surface="order" />
       </div>
-
-      {settings && (
-        <p className="mt-6 px-1 text-center text-xs text-brand-400">
-          Prices are re-read fresh from our kitchen — what you see is what we charge. Questions? Call{' '}
-          <a href={`tel:+${settings.kitchen_whatsapp}`} className="link-quiet font-medium">{settings.kitchen_phone_display}</a>.
-        </p>
-      )}
 
       {/* Sticky bottom cart bar → opens CartSheet → /checkout */}
       <CartBar />

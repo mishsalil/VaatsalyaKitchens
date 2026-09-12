@@ -74,11 +74,15 @@ export function Home() {
       <section className="bg-cream-50">
         <div className="container-wide grid items-center gap-6 py-8 sm:py-12 md:grid-cols-2">
           <div>
-            <h1 className="font-serif text-4xl font-bold leading-tight text-brand-900 sm:text-5xl">
+            <p className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-gold-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-gold-500" /> Made fresh on order
+            </p>
+            <h1 className="mt-3 font-serif text-4xl font-bold leading-tight text-brand-900 sm:text-5xl">
               <span className="font-devanagari" lang="hi">वात्सल्य</span> Kitchens
             </h1>
             <p className="mt-3 max-w-md text-brand-600">
-              Homestyle veg meals for small parties, kitty gatherings and bulk orders — so simple, anyone from 12 to 70+ can order in minutes.
+              Premium restaurant-style vegetarian food with dhaba-style freshness — many cuisines from one kitchen,
+              every dish cooked when you order. For parties, kitty gatherings, bulk orders and everyday meals.
             </p>
             <GoogleRatingBadge className="mt-4" />
             <div className="mt-6 flex flex-wrap items-center gap-3">

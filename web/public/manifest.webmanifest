@@ -1,7 +1,7 @@
 {
   "name": "Vaatsalya Kitchens",
   "short_name": "Vaatsalya",
-  "description": "Home-style food for parties, kitties and bulk orders.",
+  "description": "Restaurant-style food, made fresh on order — parties, kitties and bulk orders.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

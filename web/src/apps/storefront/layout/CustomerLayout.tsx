@@ -130,8 +130,10 @@ export function CustomerLayout() {
         </div>
       </header>
 
-      {/* Page content. pb for the mobile bottom nav + sticky cart bar. */}
-      <main className="flex-1 pb-28 sm:pb-12">
+      {/* Page content. The bottom clearance for the fixed nav and cart bar
+          lives on the footer alone — it is the last thing on the page, so
+          padding here as well only stacked a blank band above it. */}
+      <main className="flex-1">
         <Outlet key={location.pathname} />
       </main>
 
@@ -152,7 +154,10 @@ export function CustomerLayout() {
           reachable from every page on every device — a payment gateway checks
           for them, and a customer is entitled to find them. The extra bottom
           padding on small screens clears the fixed bottom nav. */}
-      <footer className="border-t border-cream-200 bg-white px-4 pb-24 pt-3 text-sm text-brand-500 sm:pb-3">
+      {/* pb-28 on phones clears the bottom nav (56px) plus the cart bar that
+          sits above it when the cart is not empty; sm:pb-16 clears the desktop
+          cart bar alone. */}
+      <footer className="mt-6 border-t border-cream-200 bg-white px-4 pb-28 pt-3 text-sm text-brand-500 sm:pb-16">
         <div className="container-wide">
           <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-xs">
             <Link to="/contact" className="link-quiet">Contact Us</Link>

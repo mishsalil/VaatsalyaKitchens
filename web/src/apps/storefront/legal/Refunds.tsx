@@ -66,7 +66,7 @@ export function Refunds() {
         </ul>
         <p>
           We cannot refund an order simply because a dish was not to your taste, or because the quantity ordered was
-          more than you needed. Home-style cooking varies a little from batch to batch, and photographs on the menu are
+          more than you needed. Fresh cooking varies a little from batch to batch, and photographs on the menu are
           indicative.
         </p>
       </Clause>
