@@ -66,7 +66,12 @@ just by ordering.
 in the deploy workflow): run `database/migration_015_variant_groups.sql` (or
 the cumulative `database/migrate_production.sql`, which includes it), then
 re-run the "015 — groups" section at the bottom of `database/menu_options.sql`
-so the Preparation/Vegetables groups and their defaults are seeded.
+so the Preparation/Vegetables groups and their defaults are seeded. If you
+refresh the menu from `menu_snapshot.sql`, run it only *after* migration 015.
+
+An app build older than this release cannot order the Deluxe Chinese Combo
+(it posts a single variant id, and the server now needs one per group) —
+every other dish still works, so ship the new APK alongside this deploy.
 
 ## Menu data from Zomato
 
@@ -98,12 +103,15 @@ group with no prefix defaults to Preparation). For example:
 Preparation=Half:-70|Full:*+150|Vegetables=With Vegetables:*0|Without Vegetables:0
 ```
 
-An order line can select more than one variant (one per group) — `order_items`
-stores that as a JSON `variant_ids` array, which supersedes the older
-single-value `variant_id` column. `variant_id` is still populated (from the
-first id) for old reports and integrations that read it, but the app itself
-reads `variant_ids` and falls back to `variant_id` only when `variant_ids` is
-absent (older app builds).
+Group labels are at most 40 characters, and this mini-format has no escape for
+`=` or `:` inside a variant or group name — avoid those characters in either.
+
+An order line can select more than one variant (one per group) —
+`order_items.variant_ids` holds the chosen ids joined by commas (like
+`addon_ids`), in group order. `variant_id` is NULL on every order written
+after migration 015 and is only read for older rows; a posted `variant_id`
+from an old app build (which has no concept of groups) is still accepted as
+a one-element list.
 
 ## Review prompts (cron)
 
