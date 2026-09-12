@@ -435,6 +435,7 @@ PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 CREATE TABLE IF NOT EXISTS menu_item_variants (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   item_id INT UNSIGNED NOT NULL,
+  group_label VARCHAR(40) NOT NULL DEFAULT 'Preparation',
   name VARCHAR(80) NOT NULL,
   price_delta DECIMAL(10,2) NOT NULL DEFAULT 0,
   is_default TINYINT(1) NOT NULL DEFAULT 0,
@@ -501,6 +502,10 @@ PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE order_items ADD COLUMN addon_ids VARCHAR(255) NULL')
   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='addon_ids');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE order_items ADD COLUMN variant_ids VARCHAR(255) NULL AFTER variant_id')
+  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_ids');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 CREATE TABLE IF NOT EXISTS order_events (
@@ -686,7 +691,9 @@ UNION ALL SELECT 'table kitchen_hours',             IF(COUNT(*)=1,'OK','MISSING'
 UNION ALL SELECT 'table category_hours',            IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='category_hours'
 UNION ALL SELECT 'table auth_tokens',               IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='auth_tokens'
 UNION ALL SELECT 'table fcm_tokens',                IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='fcm_tokens'
-UNION ALL SELECT 'kitchen_hours seeded',            IF(COUNT(*) >= 1,'OK','EMPTY') FROM kitchen_hours;
+UNION ALL SELECT 'kitchen_hours seeded',            IF(COUNT(*) >= 1,'OK','EMPTY') FROM kitchen_hours
+UNION ALL SELECT 'menu_item_variants.group_label', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='menu_item_variants' AND COLUMN_NAME='group_label'
+UNION ALL SELECT 'order_items.variant_ids', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_ids';
 
 -- --- migration_013: ratings and reviews (phase 1) --------------------------
 CREATE TABLE IF NOT EXISTS order_reviews (

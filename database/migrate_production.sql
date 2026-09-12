@@ -481,6 +481,15 @@ SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE menu_items ADD COLUMN de
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 
+-- --- migration_015: variant groups ------------------------------------------
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE menu_item_variants ADD COLUMN group_label VARCHAR(40) NOT NULL DEFAULT ''Preparation'' AFTER item_id')
+  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='menu_item_variants' AND COLUMN_NAME='group_label');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE order_items ADD COLUMN variant_ids VARCHAR(255) NULL AFTER variant_id')
+  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_ids');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+
 -- ============================================================================
 -- VERIFICATION — every row must read OK.
 -- ============================================================================
@@ -522,4 +531,6 @@ UNION ALL SELECT 'table order_reviews',      IF(COUNT(*)=1,'OK','MISSING') FROM 
 UNION ALL SELECT 'table order_item_reviews', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='order_item_reviews'
 UNION ALL SELECT 'table review_prompts',     IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='review_prompts'
 UNION ALL SELECT 'table review_tokens',      IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='review_tokens'
-UNION ALL SELECT 'menu_items.description', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='menu_items' AND COLUMN_NAME='description';
+UNION ALL SELECT 'menu_items.description', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='menu_items' AND COLUMN_NAME='description'
+UNION ALL SELECT 'menu_item_variants.group_label', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='menu_item_variants' AND COLUMN_NAME='group_label'
+UNION ALL SELECT 'order_items.variant_ids', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_ids';
