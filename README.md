@@ -62,7 +62,7 @@ can order easily.
 That's it. Orders will appear in `/admin` and customers register themselves
 just by ordering.
 
-### Menu data from Zomato
+## Menu data from Zomato
 
 `database/menu_descriptions.sql`, `menu_additions.sql` and `menu_options.sql` were
 generated from the partner-portal export (`Menu-data.xlsx`) and are plain, re-runnable
