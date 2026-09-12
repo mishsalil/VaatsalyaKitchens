@@ -1,4 +1,4 @@
-# Discount codes: one budget number, three codes, a 30 % ceiling
+# Discount codes: one budget number, three codes, a 24 % ceiling
 
 **Date:** 2026-09-12
 **Status:** approved, not yet implemented
@@ -13,7 +13,7 @@ code typed at checkout. On the admin side one setting — the percentage of
 sales the kitchen is willing to give away — from which the system derives
 2–3 codes by rule, shown on an admin Discounts screen so they can be used in
 marketing. Codes must also work at the counter, but **a code plus the manual
-counter discount must never exceed 30 % of the pre-tax subtotal**, and the
+counter discount must never exceed 24 % of the pre-tax subtotal**, and the
 rep must see that coming.
 
 ## Facts that shape the design
@@ -79,13 +79,13 @@ function discount_plan(float $budgetPct, float $avgOrder): array
 
 | kind | code | pct | max_amount | min_order | first_order_only |
 |---|---|---|---|---|---|
-| first | `WELCOME` | min(1.5·B, 25) | ₹100 | 0 | yes |
+| first | `WELCOME` | min(1.5·B, 24) | ₹100 | 0 | yes |
 | flat | `VK<round B>` e.g. `VK10` | B | ₹150 | round(A / 50)·50 | no |
-| big | `FEAST` | min(B + 5, 30) | ₹300 | round(2A / 50)·50 | no |
+| big | `FEAST` | min(B + 5, 24) | ₹300 | round(2A / 50)·50 | no |
 
 `A` = average `subtotal` of delivered orders in the last 30 days, or ₹400
 when fewer than 10 such orders exist. Percentages are rounded to whole
-numbers; a budget of 0 yields an empty plan. **No code can exceed 30 %** —
+numbers; a budget of 0 yields an empty plan. **No code can exceed 24 %** —
 the same ceiling as the combined rule below.
 
 ```php
@@ -111,8 +111,8 @@ function discount_check(string $code, float $subtotal, ?string $phone): array
   places so `compute_order_total` reproduces the same rupee figure.
 
 ```php
-/* The 30 % ceiling, in one place. */
-const DISCOUNT_CEILING_PCT = 30.0;
+/* The 24 % ceiling, in one place. */
+const DISCOUNT_CEILING_PCT = 24.0;
 function discount_combined_ok(float $codePct, float $manualPct): bool
 ```
 
@@ -150,12 +150,12 @@ predictable.
   calls the same `/api/discounts/check` (with the customer's phone from the
   form). The bill preview shows two rows when both are present:
   *Discount (10 %)* and *WELCOME (15 %)*, and a **meter line** under the
-  inputs: `Total discount 25 % of 30 % max` — normal ≤ 20 %, amber over 20 %,
-  red over 30 % with the Place-order button disabled and the text
-  *"Over the 30 % ceiling — reduce the manual discount or remove the code."*
+  inputs: `Total discount 20 % of 24 % max` — normal ≤ 18 %, amber over 18 %,
+  red over 24 % with the Place-order button disabled and the text
+  *"Over the 24 % ceiling — reduce the manual discount or remove the code."*
 - `POST admin/orders` (`create`, `update`) takes `discount_code`; the server
   re-checks the code, adds its pct to the manual pct, and refuses with 422
-  *"Discount (X %) + code (Y %) exceeds the 30 % ceiling."* when
+  *"Discount (X %) + code (Y %) exceeds the 24 % ceiling."* when
   `discount_combined_ok` is false. Stored: `discount_pct` = combined,
   `code_pct` / `code_amount` = the code's share, `discount_code`.
 - Complimentary orders ignore codes (nothing to discount).
@@ -192,14 +192,14 @@ route); `/api/admin/me` exposes `discounts` in caps.
 
 - Migration verifiers for 016 (both files).
 - `scripts/verify-discounts.php` (throwaway DB): `discount_plan` table above
-  for B = 0, 10, 20, 30 (caps at 25/30); `A` fallback under 10 orders;
+  for B = 0, 10, 16, 20 (caps at 24); `A` fallback under 10 orders;
   `discount_regenerate` deactivates old rows and keeps ids for unchanged
   codes; `discount_check` — each message, the rupee cap, first-order via an
   earlier delivered order vs an earlier cancelled one; `discount_combined_ok`
-  at 29.99 / 30 / 30.01.
+  at 23.99 / 24 / 24.01.
 - `scripts/verify-order-discount.php`: customer create with a good code
   stores the right columns; with a stale code returns 422; counter create at
-  15 + 15 passes, 15 + 16 is refused.
+  12 + 12 passes, 12 + 13 is refused.
 - `web/scripts/verify-discount-meter.mjs`: the meter's colour thresholds and
   the disabled state.
 - Builds, Android bundle, browser-pane checks of checkout with a code applied
