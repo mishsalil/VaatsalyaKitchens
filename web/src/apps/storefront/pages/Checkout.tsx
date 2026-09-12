@@ -7,14 +7,16 @@ import { useFetch } from '../../shared/hooks/useFetch';
 import { useAuth } from '../../shared/hooks/useAuth';
 import { useCart } from '../../shared/context/CartContext';
 import { useToast } from '../../shared/context/ToastContext';
-import { defaultNeededOnLocal, displayPhone, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
+import { displayPhone, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
 import { Input, Textarea } from '../../shared/components/ui/Input';
 import { Field } from '../../shared/components/ui/Field';
 import { Button } from '../../shared/components/ui/Button';
 import { FormError } from '../../shared/components/ui/FormError';
 import { OccasionSelect } from '../components/OccasionSelect';
-import { DateTimePicker } from '../components/DateTimePicker';
+import { DatePicker } from '../components/DatePicker';
+import { TimePicker } from '../components/TimePicker';
 import { kitchenOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
+import { slotsFor, firstAvailable, toLocalValue } from '../../shared/lib/timeSlots';
 import { AddressPicker, type AddressPayload } from '../components/AddressPicker';
 import { BillDetails, type BillItem } from '../components/BillDetails';
 import { computeGst } from '../../shared/lib/gst';
@@ -40,9 +42,8 @@ export function Checkout() {
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user ? displayPhone(user.phone) : '');
   const [occasion, setOccasion] = useState('');
-  // Prefilled 40 minutes out. The quick chips still move it to Today evening,
-  // tomorrow or the weekend for anything planned ahead.
-  const [whenLocal, setWhenLocal] = useState(defaultNeededOnLocal);
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
   const [notes, setNotes] = useState('');
   const [address, setAddress] = useState<AddressPayload>({ mode: 'pickup' });
   const [submitting, setSubmitting] = useState(false);
@@ -67,6 +68,19 @@ export function Checkout() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addresses.data]);
+
+  // Preselect the first slot once hours arrive (unconfigured hours resolve immediately).
+  useEffect(() => {
+    if (date) return;
+    const f = firstAvailable(hours, new Date());
+    if (f) { setDate(f.date); setTime(f.time); }
+  }, [hours, date]);
+  const whenLocal = date && time ? toLocalValue(date, time) : '';
+  const pickDate = (d: string) => {
+    setDate(d); setWhenErr('');
+    const s = slotsFor(hours, d, new Date());
+    if (!s.includes(time)) setTime(s[0] ?? '');
+  };
 
   if (lines.length === 0) {
     return <Navigate to="/order" replace />;
@@ -194,8 +208,11 @@ export function Checkout() {
               <Field label={<>Delivery address</>} hint="(leave on pickup for pickup)">
                 <AddressPicker addresses={addresses.data?.addresses ?? []} value={address} onChange={setAddress} />
               </Field>
-              <Field label="When do you need the food?" error={whenErr}>
-                <DateTimePicker value={whenLocal} onChange={(v) => { setWhenLocal(v); setWhenErr(''); }} />
+              <Field label="Which day?">
+                <DatePicker hours={hours} value={date} onChange={pickDate} />
+              </Field>
+              <Field label="What time?" error={whenErr}>
+                <TimePicker hours={hours} date={date} value={time} onChange={(t) => { setTime(t); setWhenErr(''); }} />
               </Field>
               <Field label={<>What is the occasion?</>} hint="(optional)">
                 <OccasionSelect value={occasion} onChange={setOccasion} />
