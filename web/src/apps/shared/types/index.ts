@@ -88,7 +88,8 @@ export interface MenuSubcategory {
 export interface MenuVariant {
   id: number;
   name: string;
-  /** Signed delta added to the item's base price. */
+  /** Radio group this row belongs to ("Preparation", "Vegetables"…). One pick per group. */
+  group_label: string;
   price_delta: number;
   is_default: boolean;
   sort_order: number;
@@ -133,33 +134,60 @@ export interface CartAddon {
 }
 
 export interface CartLine {
-  /** `${itemId}::${variantId|0}::${addonIds sorted, joined by ','}`. */
+  /** `${itemId}::${variantIds sorted}::${addonIds sorted}` — see cartKey. */
   key: string;
   id: number;
   name: string;
   unit: string;
   /** Item base price (re-read server-side at order time anyway). */
   basePrice: number;
-  variant?: CartVariant;
+  /** One chosen variant per group the item has (empty when it has none). */
+  variants: CartVariant[];
   addons: CartAddon[];
   qty: number;
 }
 
-/** Charged unit price = base + (variant delta) + sum(addon prices). */
+/** Charged unit price = base + sum(variant deltas) + sum(addon prices). */
 export function linePrice(l: CartLine): number {
-  return l.basePrice + (l.variant?.priceDelta ?? 0) + l.addons.reduce((s, a) => s + a.price, 0);
+  return l.basePrice + l.variants.reduce((s, v) => s + v.priceDelta, 0) + l.addons.reduce((s, a) => s + a.price, 0);
 }
 
+const sortedIds = (ids: number[]) => [...ids].filter((n) => n > 0).sort((a, b) => a - b).join(',');
+
 /** Stable cart key for one configuration of an item. */
-export function cartKey(id: number, variantId?: number, addonIds: number[] = []): string {
-  const sorted = [...addonIds].filter((n) => n > 0).sort((a, b) => a - b);
-  return `${id}::${variantId ?? 0}::${sorted.join(',')}`;
+export function cartKey(id: number, variantIds: number[] = [], addonIds: number[] = []): string {
+  return `${id}::${sortedIds(variantIds)}::${sortedIds(addonIds)}`;
+}
+
+/** "Ghee, Without Vegetables" for the label; undefined when there are none. */
+export function variantsText(vs: { name: string }[]): string | undefined {
+  return vs.length ? vs.map((v) => v.name).join(', ') : undefined;
+}
+
+export interface VariantGroup {
+  label: string;
+  options: MenuVariant[];
+  /** The is_default row, else the first option. */
+  defaultId: number;
+}
+
+/** Split an item's flat variant list into its radio groups, in order of first appearance. */
+export function groupVariants(variants: MenuVariant[]): VariantGroup[] {
+  const sorted = [...variants].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
+  const out: VariantGroup[] = [];
+  for (const v of sorted) {
+    let g = out.find((x) => x.label === v.group_label);
+    if (!g) { g = { label: v.group_label, options: [], defaultId: v.id }; out.push(g); }
+    g.options.push(v);
+    if (v.is_default) g.defaultId = v.id;
+  }
+  return out;
 }
 
 /** Compose a human label: "Paneer Tikka (Full) + Cheese, Cashews". */
-export function lineLabel(name: string, variantName?: string | null, addonsText?: string | null): string {
+export function lineLabel(name: string, variantsText?: string | null, addonsText?: string | null): string {
   let s = name;
-  if (variantName) s += ` (${variantName})`;
+  if (variantsText) s += ` (${variantsText})`;
   if (addonsText) s += ` + ${addonsText}`;
   return s;
 }

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 import { cartKey, linePrice, type CartAddon, type CartLine, type CartVariant } from '../types';
 
-const STORAGE_KEY = 'vk-cart';
+const STORAGE_KEY = 'vk-cart-v2';
 
 /** Spec the picker/menu row passes when adding a configured item. */
 export interface AddSpec {
@@ -9,7 +9,7 @@ export interface AddSpec {
   name: string;
   unit: string;
   basePrice: number;
-  variant?: CartVariant;
+  variants?: CartVariant[];
   addons?: CartAddon[];
   qty?: number;
 }
@@ -32,26 +32,19 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
-/**
- * Migrate legacy carts: old lines were `{id,name,price,unit,qty}` with no key.
- * Synthesise a plain-item key and carry the old price as basePrice.
- */
 function load(): CartLine[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.map((l: Partial<CartLine> & { price?: number }) => ({
-      key: l.key ?? cartKey(l.id ?? 0),
-      id: l.id ?? 0,
-      name: l.name ?? '',
-      unit: l.unit ?? '',
-      basePrice: l.basePrice ?? l.price ?? 0,
-      variant: l.variant,
-      addons: l.addons ?? [],
-      qty: l.qty ?? 1,
-    }));
+    return parsed.filter(
+      (l: Partial<CartLine>): l is CartLine =>
+        typeof l.key === 'string' &&
+        typeof l.id === 'number' &&
+        Array.isArray(l.variants) &&
+        Array.isArray(l.addons)
+    );
   } catch {
     return [];
   }
@@ -70,7 +63,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const add = useCallback((spec: AddSpec) => {
     const qty = spec.qty ?? 1;
-    const key = cartKey(spec.id, spec.variant?.id, (spec.addons ?? []).map((a) => a.id));
+    const variants = spec.variants ?? [];
+    const key = cartKey(spec.id, variants.map((v) => v.id), (spec.addons ?? []).map((a) => a.id));
     setLines((prev) => {
       const existing = prev.find((l) => l.key === key);
       if (existing) {
@@ -84,7 +78,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
           name: spec.name,
           unit: spec.unit,
           basePrice: spec.basePrice,
-          variant: spec.variant,
+          variants,
           addons: spec.addons ?? [],
           qty,
         },
