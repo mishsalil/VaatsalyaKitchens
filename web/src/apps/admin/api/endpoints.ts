@@ -130,6 +130,8 @@ export interface AdminItemPayload {
   name: string;
   price: number;
   unit: string;
+  /** One line under the dish name on the menu. Blank = nothing shown. */
+  description?: string;
   variants: AdminVariantInput[];
   addons: AdminAddonInput[];
 }

@@ -55,19 +55,19 @@ export function MenuItemRow({
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-brand-900">{item.name}</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-brand-500">
-            <span className="font-medium text-gold-600">★</span>
             <span>{priceLabel}</span>
             <span className="text-brand-300">·</span>
             <span>{item.unit}</span>
           </p>
-          {hasOptions ? (
+          {/* The kitchen's own line about the dish, when it has written one;
+              nothing otherwise. A generic tagline on every row said nothing. */}
+          {item.description && <p className="mt-1 text-xs text-brand-500">{item.description}</p>}
+          {hasOptions && (
             <p className="mt-1 text-xs font-medium text-brand-600">
               {item.variants.length > 0 && `${item.variants.length} size${item.variants.length > 1 ? 's' : ''}`}
               {item.variants.length > 0 && item.addons.length > 0 ? ' · ' : ''}
               {item.addons.length > 0 && `${item.addons.length} add-on${item.addons.length > 1 ? 's' : ''} available`}
             </p>
-          ) : (
-            <p className="mt-1 text-xs text-brand-400">Homestyle · made fresh on order</p>
           )}
           {unavailableUntil && (
             <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold-100 px-2 py-0.5 text-xs font-semibold text-gold-800">

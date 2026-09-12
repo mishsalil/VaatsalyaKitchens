@@ -24,7 +24,7 @@ function route($method, $action, $parts): void
     )->fetchAll();
 
     $stmt = $db->prepare(
-        'SELECT id, category_id, subcategory_id, name, price, unit FROM menu_items
+        'SELECT id, category_id, subcategory_id, name, description, price, unit FROM menu_items
           WHERE available = 1 AND (branch_id = ? OR branch_id IS NULL)
           ORDER BY sort_order, id'
     );

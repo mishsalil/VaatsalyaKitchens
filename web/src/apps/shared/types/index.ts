@@ -105,6 +105,8 @@ export interface MenuItem {
   category_id: number;
   subcategory_id: number | null;
   name: string;
+  /** One line under the name on the menu; null when the kitchen has not written one. */
+  description?: string | null;
   price: number;
   unit: string;
   /** Optional explicit image URL; otherwise the SPA derives /menu/{id}.webp. */

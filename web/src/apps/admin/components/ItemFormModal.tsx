@@ -41,6 +41,7 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [unit, setUnit] = useState('');
+  const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [subcategoryId, setSubcategoryId] = useState<number | ''>('');
   const [variants, setVariants] = useState<VariantRow[]>([]);
@@ -62,6 +63,7 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
       setName(item.name);
       setPrice(String(item.price));
       setUnit(item.unit);
+      setDescription(item.description ?? '');
       setCategoryId(item.category_id);
       setSubcategoryId(item.subcategory_id ?? '');
       setVariants(
@@ -78,6 +80,7 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
       setName('');
       setPrice('');
       setUnit('');
+      setDescription('');
       setCategoryId(defaultCategoryId ?? categories[0]?.id ?? '');
       setSubcategoryId('');
       setVariants([]);
@@ -167,6 +170,7 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
         name: trimmedName,
         price: priceNum,
         unit: unit.trim(),
+        description: description.trim(),
         category_id: Number(categoryId),
         subcategory_id: subcategoryId || null,
         variants: variantPayload,
@@ -205,6 +209,15 @@ export function ItemFormModal({ open, onClose, item, defaultCategoryId, categori
             <Input id="item-unit" value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="per plate" />
           </Field>
         </div>
+        <Field label="Description" htmlFor="item-desc" hint={`one line under the name · ${160 - description.length} left`}>
+          <Input
+            id="item-desc"
+            value={description}
+            maxLength={160}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Cottage cheese in a rich tomato-butter gravy, mildly spiced"
+          />
+        </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Category" htmlFor="item-cat" error={catErr}>
             <Select id="item-cat" value={categoryId} invalid={!!catErr} onChange={(e) => changeCategory(Number(e.target.value))}>

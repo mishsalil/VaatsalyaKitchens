@@ -49,7 +49,7 @@ function route($method, $action, $parts): void
         unset($s);
 
         $items = $db->query(
-            'SELECT id, category_id, subcategory_id, name, price, unit, available, sort_order
+            'SELECT id, category_id, subcategory_id, name, description, price, unit, available, sort_order
                FROM menu_items ORDER BY sort_order, id'
         )->fetchAll();
         $itemIds = array_map(fn($i) => (int)$i['id'], $items);
@@ -428,6 +428,7 @@ function route($method, $action, $parts): void
             Response::error('Please enter a valid price.');
         }
         $unit = mb_substr(trim((string)($_POST['unit'] ?? '')), 0, 60);
+        $description = mb_substr(trim((string)($_POST['description'] ?? '')), 0, 160) ?: null;
         $subcategoryId = normalize_subcategory_id($_POST['subcategory_id'] ?? null, $categoryId);
         $variants = $_POST['variants'] ?? [];
         $addons = $_POST['addons'] ?? [];
@@ -437,9 +438,9 @@ function route($method, $action, $parts): void
         $db->beginTransaction();
         try {
             $db->prepare(
-                'INSERT INTO menu_items (category_id, subcategory_id, name, price, unit, available, sort_order, branch_id)
-                 VALUES (?, ?, ?, ?, ?, 1, ?, ?)'
-            )->execute([$categoryId, $subcategoryId, $name, $price, $unit, $maxSort + 1, $branchId]);
+                'INSERT INTO menu_items (category_id, subcategory_id, name, description, price, unit, available, sort_order, branch_id)
+                 VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)'
+            )->execute([$categoryId, $subcategoryId, $name, $description, $price, $unit, $maxSort + 1, $branchId]);
             $itemId = (int)$db->lastInsertId();
             save_item_options($db, $itemId, $variants, $addons);
             $db->commit();
@@ -466,6 +467,7 @@ function route($method, $action, $parts): void
             Response::error('Please enter a valid price.');
         }
         $unit = mb_substr(trim((string)($_POST['unit'] ?? '')), 0, 60);
+        $description = mb_substr(trim((string)($_POST['description'] ?? '')), 0, 160) ?: null;
         $categoryId = (int)($_POST['category_id'] ?? $row['category_id']);
         if (!category_exists($categoryId)) {
             Response::error('Category not found.', 404);
@@ -476,8 +478,8 @@ function route($method, $action, $parts): void
 
         $db->beginTransaction();
         try {
-            $db->prepare('UPDATE menu_items SET name = ?, price = ?, unit = ?, category_id = ?, subcategory_id = ? WHERE id = ?')
-                ->execute([$name, $price, $unit, $categoryId, $subcategoryId, $id]);
+            $db->prepare('UPDATE menu_items SET name = ?, description = ?, price = ?, unit = ?, category_id = ?, subcategory_id = ? WHERE id = ?')
+                ->execute([$name, $description, $price, $unit, $categoryId, $subcategoryId, $id]);
             save_item_options($db, $id, $variants, $addons);
             $db->commit();
         } catch (Throwable $e) {

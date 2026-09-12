@@ -475,6 +475,12 @@ VALUES ('reviews_since', DATE_FORMAT(NOW(), '%Y-%m-%d %H:%i:%s'))
 ON DUPLICATE KEY UPDATE `key` = `key`;
 
 
+-- --- migration_014: one-line dish descriptions -----------------------------
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE menu_items ADD COLUMN description VARCHAR(160) NULL AFTER name')
+  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='menu_items' AND COLUMN_NAME='description');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+
 -- ============================================================================
 -- VERIFICATION — every row must read OK.
 -- ============================================================================
@@ -515,4 +521,5 @@ UNION ALL SELECT 'orders.delivered_at',   IF(COUNT(*)=1,'OK','MISSING') FROM inf
 UNION ALL SELECT 'table order_reviews',      IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='order_reviews'
 UNION ALL SELECT 'table order_item_reviews', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='order_item_reviews'
 UNION ALL SELECT 'table review_prompts',     IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='review_prompts'
-UNION ALL SELECT 'table review_tokens',      IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='review_tokens';
+UNION ALL SELECT 'table review_tokens',      IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='review_tokens'
+UNION ALL SELECT 'menu_items.description', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='menu_items' AND COLUMN_NAME='description';
