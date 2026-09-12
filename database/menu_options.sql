@@ -444,3 +444,22 @@ DELETE a FROM menu_item_addons a WHERE a.item_id IN (SELECT id FROM (SELECT id F
 INSERT INTO menu_item_addons (item_id, name, price, available, sort_order)
 SELECT id, 'Without Vegetables', 0.00, 1, 0 FROM menu_items WHERE id IN (SELECT id FROM (SELECT id FROM menu_items WHERE category_id = 9 OR name IN ('Chinese Combo Meal', 'Deluxe Chinese Combo')) t0);
 
+-- ---------------------------------------------------------------------------
+-- 015 — groups. Run after migration_015.
+-- The combo's 15 rows are a "Combination"; Chinese dishes get a Vegetables
+-- radio in place of the "Without Vegetables" add-on.
+-- ---------------------------------------------------------------------------
+UPDATE menu_item_variants v JOIN menu_items i ON i.id = v.item_id
+   SET v.group_label = 'Combination'
+ WHERE i.name = 'Deluxe Chinese Combo';
+
+DELETE a FROM menu_item_addons a WHERE a.name = 'Without Vegetables';
+
+DELETE v FROM menu_item_variants v WHERE v.group_label = 'Vegetables';
+INSERT INTO menu_item_variants (item_id, group_label, name, price_delta, is_default, sort_order)
+SELECT id, 'Vegetables', 'With Vegetables', 0.00, 1, 100 FROM menu_items
+ WHERE category_id = 9 OR name IN ('Chinese Combo Meal', 'Deluxe Chinese Combo');
+INSERT INTO menu_item_variants (item_id, group_label, name, price_delta, is_default, sort_order)
+SELECT id, 'Vegetables', 'Without Vegetables', 0.00, 0, 101 FROM menu_items
+ WHERE category_id = 9 OR name IN ('Chinese Combo Meal', 'Deluxe Chinese Combo');
+

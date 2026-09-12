@@ -13,7 +13,29 @@ $pdo = db();
 
 function stmts(string $file): array {
     $sql = preg_replace('/^\s*--.*$/m', '', file_get_contents($file));
-    return array_values(array_filter(array_map('trim', explode(';', $sql)), fn($s) => $s !== ''));
+    // Split on ';' but not inside quoted strings — item descriptions can
+    // contain a literal semicolon (e.g. "Honey Chilli Paneer").
+    $statements = [];
+    $current = '';
+    $quote = null;
+    for ($i = 0, $len = strlen($sql); $i < $len; $i++) {
+        $ch = $sql[$i];
+        $current .= $ch;
+        if ($quote !== null) {
+            if ($ch === '\\') {
+                if ($i + 1 < $len) { $current .= $sql[++$i]; }
+            } elseif ($ch === $quote) {
+                $quote = null;
+            }
+        } elseif ($ch === "'" || $ch === '"') {
+            $quote = $ch;
+        } elseif ($ch === ';') {
+            $statements[] = substr($current, 0, -1);
+            $current = '';
+        }
+    }
+    if (trim($current) !== '') { $statements[] = $current; }
+    return array_values(array_filter(array_map('trim', $statements), fn($s) => $s !== ''));
 }
 
 function run(PDO $pdo, array $files): void {
@@ -117,6 +139,16 @@ $newId = (int)$pdo->lastInsertId();
 printf("  a newly added item got id %d (must be > %d)  %s\n",
     $newId, $range['hi'], $newId > $range['hi'] ? 'OK' : 'COLLISION');
 if ($newId <= (int)$range['hi']) { $fail++; }
+
+/* 6. The Vegetables radio (Task 4) made it into the snapshot. */
+$n = (int)$pdo->query("SELECT COUNT(DISTINCT item_id) FROM menu_item_variants WHERE group_label = 'Vegetables'")->fetchColumn();
+printf("\n  items with a Vegetables variant group: %d\n", $n);
+if ($n <= 0) { $fail++; }
+
+/* 7. Item descriptions survive the export/import round trip. */
+$d = (int)$pdo->query("SELECT COUNT(*) FROM menu_items WHERE description IS NOT NULL AND description <> ''")->fetchColumn();
+printf("  items with a description: %d\n", $d);
+if ($d <= 0) { $fail++; }
 
 $pdo->exec("DROP DATABASE IF EXISTS `$db`");
 echo "\nscratch database dropped\n";
