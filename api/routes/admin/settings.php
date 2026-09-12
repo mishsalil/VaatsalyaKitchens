@@ -71,6 +71,10 @@ function route($method, $action, $parts): void
             Response::error('That does not look like a Google API key.');
         }
 
+        $mapsKeyApp = mb_substr(trim((string)($_POST['google_maps_key_app'] ?? '')), 0, 120);
+        if ($mapsKeyApp !== '' && !preg_match('/^[A-Za-z0-9_-]+$/', $mapsKeyApp)) {
+            Response::error('That does not look like a Google API key (app).');
+        }
         $reviewUrl = mb_substr(trim((string)($_POST['google_review_url'] ?? '')), 0, 300);
         if ($reviewUrl !== '' && !preg_match('#^https://([a-z0-9-]+\.)*(google\.com|g\.page|goo\.gl)/#i', $reviewUrl)) {
             Response::error('The Google review link should start with https://g.page/ or https://search.google.com/');
@@ -89,6 +93,7 @@ function route($method, $action, $parts): void
         set_setting('print_footer', $footer);
         set_setting('gst_rate', (string)$gstRate);
         set_setting('google_maps_key', $mapsKey);
+        set_setting('google_maps_key_app', $mapsKeyApp);
         set_setting('google_review_url', $reviewUrl);
         set_setting('google_place_id', $placeId);
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Star } from 'lucide-react';
 import { useAuth } from '../../shared/hooks/useAuth';
+import { mapsKeyFor } from '../../shared/lib/mapsKey';
 import { fetchGoogleRating, type GoogleRating } from '../../shared/lib/googleRating';
 
 /**
@@ -11,7 +12,7 @@ import { fetchGoogleRating, type GoogleRating } from '../../shared/lib/googleRat
  */
 export function GoogleRatingBadge({ className = '' }: { className?: string }) {
   const { settings } = useAuth();
-  const key = settings?.google_maps_key ?? '';
+  const key = mapsKeyFor(settings);
   const placeId = settings?.google_place_id ?? '';
   const [rating, setRating] = useState<GoogleRating | null>(null);
 

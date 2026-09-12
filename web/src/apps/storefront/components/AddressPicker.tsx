@@ -5,6 +5,7 @@ import { useGeolocation } from '../../shared/hooks/useGeolocation';
 import { Textarea } from '../../shared/components/ui/Input';
 import { Field } from '../../shared/components/ui/Field';
 import { useAuth } from '../../shared/hooks/useAuth';
+import { mapsKeyFor } from '../../shared/lib/mapsKey';
 import { composeAddressText } from '../../shared/lib/addressText';
 import { MapPinPicker, type AddressDraft } from './MapPinPicker';
 
@@ -40,7 +41,7 @@ export function AddressPicker({ addresses, value, onChange }: Props) {
      fields composed into address_text, coordinates from the pin. Without one
      it is the textarea and GPS button it always was. */
   const { settings } = useAuth();
-  const hasMap = !!settings?.google_maps_key;
+  const hasMap = !!mapsKeyFor(settings);
   const [draft, setDraft] = useState<AddressDraft>({ house: '', landmark: '', area: '', lat: null, lng: null });
   const reportDraft = (d: AddressDraft) => {
     setDraft(d);

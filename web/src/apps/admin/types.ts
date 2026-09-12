@@ -201,6 +201,8 @@ export interface AdminSettingsFull {
   gst_rate: string;
   /** Google Maps JavaScript API key for the customer's address picker. Blank = plain textarea. */
   google_maps_key: string;
+  /** A separate key for the Android app. Blank = the app uses the website's key. */
+  google_maps_key_app: string;
   /** Business Profile "Ask for reviews" link (g.page/r/…/review). Blank = no Google prompt. */
   google_review_url: string;
   /** Business Profile Place ID, for showing the live Google rating. Blank = no badge. */

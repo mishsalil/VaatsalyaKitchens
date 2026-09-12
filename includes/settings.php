@@ -41,6 +41,11 @@ function settings_defaults(): array
            runs in the browser); the referrer restriction in Google Cloud is
            what protects it. */
         'google_maps_key'      => '',
+        /* A second key for the Android app. The website's key is restricted to
+           the referrer vaatsalyakitchens.in; the app serves the storefront from
+           https://localhost, which that restriction refuses. Blank = the app
+           uses the website's key. */
+        'google_maps_key_app'  => '',
         /* Google Business Profile. The review URL is the "Ask for reviews" link
            (g.page/r/…/review) — one tap opens the review box already pointed
            at the kitchen. The Place ID lets the storefront show the live Google

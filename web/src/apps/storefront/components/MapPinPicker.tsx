@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Navigation } from 'lucide-react';
 import { useAuth } from '../../shared/hooks/useAuth';
+import { mapsKeyFor } from '../../shared/lib/mapsKey';
 import { useGeolocation } from '../../shared/hooks/useGeolocation';
 import { loadGoogleMaps } from '../../shared/lib/googleMaps';
 import { Input } from '../../shared/components/ui/Input';
@@ -28,7 +29,7 @@ const KITCHEN = { lat: 27.5679, lng: 80.6817 };
  */
 export function MapPinPicker({ value, onChange }: { value: AddressDraft; onChange: (d: AddressDraft) => void }) {
   const { settings } = useAuth();
-  const key = settings?.google_maps_key ?? '';
+  const key = mapsKeyFor(settings);
   const mapEl = useRef<HTMLDivElement>(null);
   const searchEl = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);

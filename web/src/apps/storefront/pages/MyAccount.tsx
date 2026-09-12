@@ -4,6 +4,7 @@ import { Plus, Package, MapPin, Bell, BellOff, BellRing, User, LogOut } from 'lu
 import { ordersApi, addressesApi } from '../../shared/api/endpoints';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { useAuth } from '../../shared/hooks/useAuth';
+import { mapsKeyFor } from '../../shared/lib/mapsKey';
 import { useToast } from '../../shared/context/ToastContext';
 import { usePush } from '../../shared/push/usePush';
 import { rupees, displayPhone } from '../../shared/lib/format';
@@ -231,7 +232,7 @@ function AddAddressModal({ onClose, onSaved, onError }: { onClose: () => void; o
      textarea it always was. Saved addresses used to carry no coordinates at
      all, which left the rider with nothing to navigate to. */
   const { settings } = useAuth();
-  const hasMap = !!settings?.google_maps_key;
+  const hasMap = !!mapsKeyFor(settings);
   const [draft, setDraft] = useState<AddressDraft>({ house: '', landmark: '', area: '', lat: null, lng: null });
 
   const save = async () => {

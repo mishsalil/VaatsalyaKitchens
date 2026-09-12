@@ -29,6 +29,8 @@ export interface Settings {
   logo_path?: string | null;
   /** Google Maps JavaScript API key for the address picker. Blank = plain textarea. */
   google_maps_key?: string;
+  /** A separate key for the Android app (its origin is https://localhost). Blank = use the web key. */
+  google_maps_key_app?: string;
   /** Business Profile "Ask for reviews" link. Blank = no Google prompt after rating. */
   google_review_url?: string;
   /** Business Profile Place ID, for the live Google rating badge. Blank = no badge. */

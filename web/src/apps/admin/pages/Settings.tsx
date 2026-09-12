@@ -48,6 +48,7 @@ export function AdminSettings() {
         print_footer: form.print_footer,
         gst_rate: form.gst_rate,
         google_maps_key: form.google_maps_key ?? '',
+        google_maps_key_app: form.google_maps_key_app ?? '',
         google_review_url: form.google_review_url ?? '',
         google_place_id: form.google_place_id ?? '',
       });
@@ -141,8 +142,11 @@ export function AdminSettings() {
           <Field label="GSTIN" htmlFor="k-gstin" hint="optional">
             <Input id="k-gstin" value={form.gstin} onChange={(e) => set('gstin', e.target.value.toUpperCase())} placeholder="29ABCDE1234F1Z5" maxLength={15} />
           </Field>
-          <Field label="Google Maps API key" htmlFor="k-maps" hint="for the customer's address picker — blank keeps the plain address box">
+          <Field label="Google Maps API key — website" htmlFor="k-maps" hint="restrict this one to the referrer vaatsalyakitchens.in/* — blank keeps the plain address box">
             <Input id="k-maps" value={form.google_maps_key ?? ''} onChange={(e) => set('google_maps_key', e.target.value.trim())} placeholder="AIza…" autoComplete="off" />
+          </Field>
+          <Field label="Google Maps API key — Android app" htmlFor="k-maps-app" hint="the app runs from https://localhost, which a referrer restriction refuses; restrict this one by API and daily quota instead. Blank = uses the website key.">
+            <Input id="k-maps-app" value={form.google_maps_key_app ?? ''} onChange={(e) => set('google_maps_key_app', e.target.value.trim())} placeholder="AIza…" autoComplete="off" />
           </Field>
           <Field label="Google review link" htmlFor="k-review" hint="Business Profile → Ask for reviews. Shown to every customer after they rate an order.">
             <Input id="k-review" value={form.google_review_url ?? ''} onChange={(e) => set('google_review_url', e.target.value.trim())} placeholder="https://g.page/r/…/review" autoComplete="off" />
