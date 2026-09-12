@@ -21,7 +21,7 @@ const categories = [
 const it = (id, category_id, name, price, sort_order = 0) => ({ id, category_id, subcategory_id: null, name, price, unit: '', variants: [], addons: [], sort_order });
 const items = [
   it(1, 12, 'Paneer Butter Masala', 249), it(2, 13, 'Butter Naan', 40, 1), it(3, 13, 'Tandoori Roti', 15, 0),
-  it(4, 14, 'Paratha', 30), it(5, 15, 'Jeera Rice', 120), it(6, 16, 'Green Salad', 60), it(7, 7, 'Paneer Tikka', 249),
+  it(4, 14, 'Paratha', 30, 2), it(5, 15, 'Jeera Rice', 120), it(6, 16, 'Green Salad', 60), it(7, 7, 'Paneer Tikka', 249),
   it(8, 9, 'Veg Noodles', 180), it(9, 12, 'Dal Fry', 149),
 ];
 const names = (r) => r.map((x) => x.name);
@@ -36,6 +36,9 @@ check('never suggests what is in the cart', false, run([1, 5]).includes('Jeera R
 check('cap of four', 4, run([]).length);
 check('max honoured', 2, suggestUpsells({ items, categories, cartItemIds: [1], closedCategoryIds: [], max: 2 }).length);
 check('unknown category names degrade to fill', 4, suggestUpsells({ items, categories: categories.map((c) => ({ ...c, name: 'X' + c.id })), cartItemIds: [1], closedCategoryIds: [] }).length);
+check('bread is one class — Tawa bread in cart means no more bread', false, run([1, 4]).some((n) => ['Tandoori Roti', 'Butter Naan', 'Paratha'].includes(n)));
+check('Tandoori closed → falls through to Tawa bread', 'Paratha', run([1], [13])[0]);
+check('Tandoori bread in cart → Tawa bread not also suggested', false, run([1, 2]).includes('Paratha'));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

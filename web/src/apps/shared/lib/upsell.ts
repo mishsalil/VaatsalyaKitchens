@@ -38,12 +38,17 @@ export function suggestUpsells({ items, categories, cartItemIds, closedCategoryI
   const markHandled = (cats: number[]) => cats.forEach((c) => c >= 0 && handled.add(c));
 
   if (has(MAIN)) {
-    if (!has(TANDOORI_BREADS)) take([TANDOORI_BREADS], 2, bySort);
+    // Bread is one class spanning both categories: offer 2 from whichever are
+    // open (so a closed Tandoori section still offers Tawa breads), and mark
+    // the whole class handled either way so fill never adds a third bread.
+    if (!has(TANDOORI_BREADS) && !has(TAWA_BREADS)) take([TANDOORI_BREADS, TAWA_BREADS], 2, bySort);
     markHandled([TANDOORI_BREADS, TAWA_BREADS]);
     if (!has(RICE)) take([RICE], 1, bySort);
     markHandled([RICE]);
   }
   if (has(...STARTERS) && !has(MAIN)) {
+    // Cheapest main, deliberately: the natural first step up from a starter
+    // is the least-committal main course, not a particular sort position.
     take([MAIN], 1, byPrice);
     markHandled([MAIN, ...STARTERS]);
   }
