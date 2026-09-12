@@ -21,7 +21,6 @@ function resolve_order_lines(PDO $pdo, array $items): array
     $lines = [];
     $total = 0.0;
     $itemStmt    = $pdo->prepare('SELECT name, price, unit FROM menu_items WHERE id = ? AND available = 1');
-    $variantStmt = $pdo->prepare('SELECT id, name, price_delta FROM menu_item_variants WHERE item_id = ? ORDER BY sort_order, id');
     $addonStmt   = $pdo->prepare('SELECT id, name, price FROM menu_item_addons WHERE item_id = ? AND available = 1');
 
     foreach ($items as $it) {
@@ -37,21 +36,9 @@ function resolve_order_lines(PDO $pdo, array $items): array
         }
         $unit = (float)$menuItem['price'];
 
-        $variantStmt->execute([$id]);
-        $itemVariants = $variantStmt->fetchAll();
-        $variantId   = (int)($it['variant_id'] ?? 0);
-        $variantName = null;
-        if ($itemVariants) {
-            $chosen = null;
-            foreach ($itemVariants as $v) {
-                if ((int)$v['id'] === $variantId) { $chosen = $v; break; }
-            }
-            if (!$chosen) {
-                Response::error('Please choose a size for ' . $menuItem['name'] . '.');
-            }
-            $unit += (float)$chosen['price_delta'];
-            $variantName = $chosen['name'];
-        }
+        $vr = resolve_item_variants($pdo, $id, $menuItem['name'], $it);
+        $unit += $vr['delta'];
+        $variantName = $vr['name'];
 
         $addonNames = [];
         $chosenAddonIds = [];
@@ -80,7 +67,7 @@ function resolve_order_lines(PDO $pdo, array $items): array
             'variant_name' => $variantName,
             'addons_text'  => $addonNames ? implode(', ', $addonNames) : null,
             'menu_item_id' => $id,
-            'variant_id'   => $variantId ?: null,
+            'variant_ids'  => $vr['ids'],
             'addon_ids'    => $chosenAddonIds ? implode(',', $chosenAddonIds) : null,
         ];
         $total += $unit * $qty;
@@ -197,7 +184,7 @@ function route($method, $action, $parts): void
         // menu ids come back too, so the edit screen rebuilds each line exactly
         // rather than matching on name (migration_007; NULL on pre-007 orders).
         $itemStmt = db()->prepare(
-            'SELECT menu_item_id, variant_id, addon_ids, item_name, variant_name, addons_text, qty, unit, price
+            'SELECT menu_item_id, variant_id, variant_ids, addon_ids, item_name, variant_name, addons_text, qty, unit, price
                FROM order_items WHERE order_id = ? ORDER BY id'
         );
         $itemStmt->execute([$id]);
@@ -207,6 +194,10 @@ function route($method, $action, $parts): void
             $it['qty']   = (int)$it['qty'];
             $it['menu_item_id'] = $it['menu_item_id'] !== null ? (int)$it['menu_item_id'] : null;
             $it['variant_id']   = $it['variant_id'] !== null ? (int)$it['variant_id'] : null;
+            // New orders carry the list; older ones only the single id.
+            $it['variant_ids'] = $it['variant_ids']
+                ? array_map('intval', explode(',', $it['variant_ids']))
+                : ($it['variant_id'] !== null ? [$it['variant_id']] : []);
             $it['addon_ids']    = $it['addon_ids'] ? array_map('intval', explode(',', $it['addon_ids'])) : [];
         }
         unset($it);

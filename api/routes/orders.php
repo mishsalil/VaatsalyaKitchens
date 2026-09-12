@@ -87,7 +87,6 @@ function route($method, $action, $parts): void
         $lines = [];
         $total = 0.0;
         $itemStmt = $pdo->prepare('SELECT name, price, unit, category_id FROM menu_items WHERE id = ? AND available = 1');
-        $variantStmt = $pdo->prepare('SELECT id, name, price_delta FROM menu_item_variants WHERE item_id = ? ORDER BY sort_order, id');
         $addonStmt = $pdo->prepare('SELECT id, name, price FROM menu_item_addons WHERE item_id = ? AND available = 1');
         foreach ($items as $it) {
             $id  = (int)($it['id'] ?? 0);
@@ -102,25 +101,10 @@ function route($method, $action, $parts): void
             }
             $base = (float)$menuItem['price'];
 
-            // Variants: if the item has any, a valid variant_id is required.
-            $variantStmt->execute([$id]);
-            $itemVariants = $variantStmt->fetchAll();
-            $variantId = (int)($it['variant_id'] ?? 0);
-            $variantName = null;
-            $unit = $base;
-            if ($itemVariants) {
-                $chosen = null;
-                if ($variantId > 0) {
-                    foreach ($itemVariants as $v) {
-                        if ((int)$v['id'] === $variantId) { $chosen = $v; break; }
-                    }
-                }
-                if (!$chosen) {
-                    Response::error('Please choose a size for ' . $menuItem['name'] . '.');
-                }
-                $unit = $base + (float)$chosen['price_delta'];
-                $variantName = $chosen['name'];
-            }
+            // Variants: one choice per group, validated and snapshotted in one place.
+            $vr = resolve_item_variants($pdo, $id, $menuItem['name'], $it);
+            $unit = $base + $vr['delta'];
+            $variantName = $vr['name'];
 
             // Add-ons: optional, multi-select; each must belong to the item & be available.
             $addonNames = [];
@@ -161,7 +145,7 @@ function route($method, $action, $parts): void
                 // Ids behind the snapshot, so a later edit rebuilds this line
                 // exactly instead of matching on name (migration_007).
                 'menu_item_id' => $id,
-                'variant_id'   => $variantId ?: null,
+                'variant_ids'  => $vr['ids'],
                 'addon_ids'    => $chosenAddonIds ? implode(',', $chosenAddonIds) : null,
             ];
             $total += $unit * $qty;
