@@ -287,12 +287,9 @@ Add above `insert_order_lines`:
  */
 function resolve_item_variants(PDO $pdo, int $itemId, string $itemName, array $posted): array
 {
-    static $stmt = null;
-    if ($stmt === null || $stmt->queryString === '') {
-        $stmt = $pdo->prepare(
-            'SELECT id, group_label, name, price_delta FROM menu_item_variants WHERE item_id = ? ORDER BY sort_order, id'
-        );
-    }
+    $stmt = $pdo->prepare(
+        'SELECT id, group_label, name, price_delta FROM menu_item_variants WHERE item_id = ? ORDER BY sort_order, id'
+    );
     $stmt->execute([$itemId]);
     $rows = $stmt->fetchAll();
     if (!$rows) {
@@ -327,8 +324,6 @@ function resolve_item_variants(PDO $pdo, int $itemId, string $itemName, array $p
     return ['delta' => $delta, 'name' => implode(', ', $names), 'ids' => implode(',', $ids)];
 }
 ```
-
-(The `static $stmt` cache is per-process and the PDO is the same one; if `$pdo` could differ between calls in tests, prepare each call instead — simpler and fine: drop the static and just `$pdo->prepare(...)` every time. Use the simple form.)
 
 Then in `insert_order_lines`, change the INSERT to write `variant_ids`:
 
@@ -746,9 +741,9 @@ export function groupVariants(variants: MenuVariant[]): VariantGroup[] {
 
 - [ ] **Step 5: Run the script; type-check**
 
-`node scripts/verify-cart.mjs` → `14 passed`. `npx tsc --noEmit -p .` will now list every consumer of `l.variant` — that is the worklist for Tasks 6 and 8 (do not fix them here beyond what the commit needs to compile: it will not compile yet; that is fine for this commit only if you commit together with Task 6. Preferred: do Task 6's mechanical edits now as part of this commit).
+`node scripts/verify-cart.mjs` → `14 passed`. `npx tsc --noEmit -p .` will list every consumer of the old `l.variant` / `cartKey` signature — Task 6 fixes them. Commit this task on its own (type errors between Task 5 and Task 6 are expected; do not stop the branch there).
 
-- [ ] **Step 6: Commit** (after Task 6 Step 1–3 if tsc demands it)
+- [ ] **Step 6: Commit**
 
 ```bash
 git add web/src/apps/shared/types/index.ts web/src/apps/shared/context/CartContext.tsx web/scripts/verify-cart.mjs
