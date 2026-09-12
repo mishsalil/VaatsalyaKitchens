@@ -455,7 +455,7 @@ UPDATE menu_item_variants v JOIN menu_items i ON i.id = v.item_id
 
 DELETE a FROM menu_item_addons a WHERE a.name = 'Without Vegetables';
 
-DELETE v FROM menu_item_variants v WHERE v.group_label = 'Vegetables';
+DELETE v FROM menu_item_variants v WHERE v.group_label = 'Vegetables' AND v.item_id IN (SELECT id FROM (SELECT id FROM menu_items WHERE category_id = 9 OR name IN ('Chinese Combo Meal', 'Deluxe Chinese Combo')) t);
 INSERT INTO menu_item_variants (item_id, group_label, name, price_delta, is_default, sort_order)
 SELECT id, 'Vegetables', 'With Vegetables', 0.00, 1, 100 FROM menu_items
  WHERE category_id = 9 OR name IN ('Chinese Combo Meal', 'Deluxe Chinese Combo');
