@@ -19,14 +19,17 @@ import { kitchenOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hour
 import { slotsFor, firstAvailable, toLocalValue } from '../../shared/lib/timeSlots';
 import { AddressPicker, type AddressPayload } from '../components/AddressPicker';
 import { BillDetails, type BillItem } from '../components/BillDetails';
+import { CartLines } from '../components/CartLines';
+import { UpsellStrip } from '../components/UpsellStrip';
 import { computeGst } from '../../shared/lib/gst';
 import { lineLabel, linePrice, variantsText } from '../../shared/types';
 import { PushNudge } from '../../shared/push/PushNudge';
 
 /**
- * Step 2 of the guided order flow — a focused checkout. The cart is read-only
- * here (edited back on /order via the CartSheet); this page collects delivery
- * details + contact and places the order. Empty cart → back to the menu.
+ * Step 2 of the guided order flow — a focused checkout. The cart is editable
+ * here (steppers + remove on the "Your order" card, one-tap upsells beside the
+ * bill); this page collects delivery details + contact and places the order.
+ * Empty cart → back to the menu.
  */
 export function Checkout() {
   const navigate = useNavigate();
@@ -38,6 +41,8 @@ export function Checkout() {
   // submitting rather than bouncing the order back from the server.
   const menu = useFetch(() => menuApi.get(), []);
   const hours = menu.data?.hours;
+  // Sections not being cooked right now — the upsell must not offer them.
+  const closedIds = hours?.closed_category_ids ?? [];
 
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user ? displayPhone(user.phone) : '');
@@ -164,7 +169,7 @@ export function Checkout() {
   };
 
   return (
-    <div className="container-page py-5">
+    <div className="container-wide py-5">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link
@@ -180,17 +185,55 @@ export function Checkout() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 sm:grid-cols-[1fr_22rem] sm:items-start">
+      <div className="mt-6 grid gap-6 md:grid-cols-[1fr_24rem] md:items-start">
         {/* Left: details form. min-w-0 matters: a 1fr grid column defaults to
             min-width:auto, so the map picker's autocomplete element — a web
             component with an intrinsic width — stretched the column and put a
             horizontal scrollbar on the whole page. */}
-        <form className="min-w-0 space-y-5" onSubmit={placeOrder}>
+        <form className="min-w-0 space-y-6" onSubmit={placeOrder}>
           {formError && <FormError message={formError} />}
 
+          {/* Your order — editable here; the last line removed sends them back to the menu. */}
+          <section className="card-soft p-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Your order</h2>
+            <div className="mt-3">
+              <CartLines />
+            </div>
+            <Link to="/order" className="link-quiet mt-4 inline-block text-sm">+ Add more dishes</Link>
+          </section>
+
+          {/* On a phone the upsell sits between the cart and the rest of the
+              form; on desktop it lives in the right column above the bill. */}
+          <div className="md:hidden">
+            <UpsellStrip items={menu.data?.items ?? []} categories={menu.data?.categories ?? []} closedCategoryIds={closedIds} />
+          </div>
+
+          {/* Delivery */}
+          <section className="card-soft p-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Delivery</h2>
+            <div className="mt-4">
+              <Field label={<>Delivery address</>} hint="(leave on pickup for pickup)">
+                <AddressPicker addresses={addresses.data?.addresses ?? []} value={address} onChange={setAddress} />
+              </Field>
+            </div>
+          </section>
+
+          {/* When */}
+          <section className="card-soft p-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">When</h2>
+            <div className="mt-4 space-y-4">
+              <Field label="Which day?">
+                <DatePicker hours={hours} value={date} onChange={pickDate} />
+              </Field>
+              <Field label="What time?" error={whenErr}>
+                <TimePicker hours={hours} date={date} value={time} onChange={(t) => { setTime(t); setWhenErr(''); }} />
+              </Field>
+            </div>
+          </section>
+
           {/* Contact */}
-          <section className="card-soft p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Contact details</h2>
+          <section className="card-soft p-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Contact</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Field label="Your name" htmlFor="cust-name" error={nameErr}>
                 <Input id="cust-name" value={name} invalid={!!nameErr} onChange={(e) => { setName(e.target.value); setNameErr(''); }} placeholder="e.g. Sunita Sharma" autoComplete="name" required />
@@ -201,19 +244,10 @@ export function Checkout() {
             </div>
           </section>
 
-          {/* Delivery */}
-          <section className="card-soft p-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Delivery</h2>
+          {/* Anything else */}
+          <section className="card-soft p-6">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Anything else</h2>
             <div className="mt-4 space-y-4">
-              <Field label={<>Delivery address</>} hint="(leave on pickup for pickup)">
-                <AddressPicker addresses={addresses.data?.addresses ?? []} value={address} onChange={setAddress} />
-              </Field>
-              <Field label="Which day?">
-                <DatePicker hours={hours} value={date} onChange={pickDate} />
-              </Field>
-              <Field label="What time?" error={whenErr}>
-                <TimePicker hours={hours} date={date} value={time} onChange={(t) => { setTime(t); setWhenErr(''); }} />
-              </Field>
               <Field label={<>What is the occasion?</>} hint="(optional)">
                 <OccasionSelect value={occasion} onChange={setOccasion} />
               </Field>
@@ -224,34 +258,35 @@ export function Checkout() {
           </section>
         </form>
 
-        {/* Right: bill + place order (sticky on desktop) */}
-        <aside className="sm:sticky sm:top-20">
-          <div className="space-y-4">
-            <BillDetails items={billItems} total={grandTotal} gst={gst} />
-            {belowMinimum && (
-              <p className="rounded-xl border border-gold-300 bg-gold-50 px-4 py-3 text-sm text-brand-700">
-                Our minimum order is <strong>{rupees(minOrder)}</strong>. Please add{' '}
-                <strong>{rupees(minOrder - total)}</strong> more to your cart.
-              </p>
-            )}
-            <form onSubmit={placeOrder}>
-              <Button type="submit" size="lg" fullWidth disabled={submitting || belowMinimum}>
-                {submitting ? 'Placing order…' : `Place order · ${rupees(grandTotal)}`}
-              </Button>
-            </form>
-            {settings && (
-              <a href={`tel:+${settings.kitchen_whatsapp}`}>
-                <Button type="button" variant="ghost" size="sm" fullWidth>
-                  <Phone className="h-4 w-4" /> Prefer to talk? Call us
-                </Button>
-              </a>
-            )}
-            <PushNudge surface="order" />
-            <p className="text-center text-xs text-brand-400">
-              Need to change dishes?{' '}
-              <Link to="/order" className="link-quiet font-medium">Back to menu</Link>
-            </p>
+        {/* Right: upsell + bill + place order (sticky on desktop) */}
+        <aside className="md:sticky md:top-20 space-y-4">
+          <div className="hidden md:block">
+            <UpsellStrip items={menu.data?.items ?? []} categories={menu.data?.categories ?? []} closedCategoryIds={closedIds} />
           </div>
+          <BillDetails items={billItems} total={grandTotal} gst={gst} />
+          {belowMinimum && (
+            <p className="rounded-xl border border-gold-300 bg-gold-50 px-4 py-3 text-sm text-brand-700">
+              Our minimum order is <strong>{rupees(minOrder)}</strong>. Please add{' '}
+              <strong>{rupees(minOrder - total)}</strong> more to your cart.
+            </p>
+          )}
+          <form onSubmit={placeOrder}>
+            <Button type="submit" size="lg" fullWidth disabled={submitting || belowMinimum}>
+              {submitting ? 'Placing order…' : `Place order · ${rupees(grandTotal)}`}
+            </Button>
+          </form>
+          {settings && (
+            <a href={`tel:+${settings.kitchen_whatsapp}`}>
+              <Button type="button" variant="ghost" size="sm" fullWidth>
+                <Phone className="h-4 w-4" /> Prefer to talk? Call us
+              </Button>
+            </a>
+          )}
+          <PushNudge surface="order" />
+          <p className="text-center text-xs text-brand-400">
+            Need to change dishes?{' '}
+            <Link to="/order" className="link-quiet font-medium">Back to menu</Link>
+          </p>
         </aside>
       </div>
     </div>

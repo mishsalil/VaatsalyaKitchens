@@ -25,7 +25,8 @@ export interface BillGst {
 
 /**
  * Swiggy-style "Bill details" card — a read-only itemized bill used on checkout
- * and order-success. Cart editing happens in the CartSheet, not here. When a GST
+ * and order-success. Lines are edited on the checkout page's own "Your order"
+ * card, not here. When a GST
  * breakdown is supplied (tax-exclusive, rate > 0), the subtotal / CGST / SGST
  * rows are shown and "To pay" is the grand total; otherwise it falls back to a
  * single total (legacy orders / GST disabled).
@@ -96,11 +97,7 @@ export function BillDetails({ items, total, gst }: { items: BillItem[]; total: n
         <span className="text-lg font-bold text-brand-900">{comp ? 'Complimentary' : rupees(total)}</span>
       </div>
       <p className="mt-2 text-xs text-brand-400">
-        {comp
-          ? 'This order is on us — nothing to pay.'
-          : hasGst
-            ? 'Prices are exclusive of GST; final total is confirmed by us on the phone.'
-            : 'Final price is confirmed by us on the phone — delivery charges may apply.'}
+        {comp ? 'This order is on us — nothing to pay.' : 'Final price is confirmed by us on the phone — delivery charges may apply.'}
       </p>
     </div>
   );
