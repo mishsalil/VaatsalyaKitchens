@@ -62,6 +62,17 @@ can order easily.
 That's it. Orders will appear in `/admin` and customers register themselves
 just by ordering.
 
+### Menu data from Zomato
+
+`database/menu_descriptions.sql`, `menu_additions.sql` and `menu_options.sql` were
+generated from the partner-portal export (`Menu-data.xlsx`) and are plain, re-runnable
+SQL matched by dish name. Prices follow **policy B**: the site keeps its own base
+prices and Zomato's upcharges are applied relative to its cheapest option, so
+"Normal" is +0 and the default. The export carries no dish-to-add-on mapping, so the
+add-on groups are the kitchen's guess — South Indian sides on dosas, uttapams and
+medu vada; Extra Cheese on sandwiches and wraps; Without Vegetables on noodles, fried
+rice and the Chinese combos. Change them in Admin → Menu like any other option.
+
 ## Review prompts (cron)
 
 `scripts/send-review-prompts.php` sends the "how was your meal?" push. It is the
