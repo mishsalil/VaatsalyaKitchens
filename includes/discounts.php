@@ -7,6 +7,8 @@
    The 24 % ceiling applies twice: no single code exceeds it, and at the
    counter a code plus the manual discount may not exceed it either. */
 
+require_once __DIR__ . '/helpers.php';
+
 const DISCOUNT_CEILING_PCT = 24.0;
 
 class DiscountError extends RuntimeException {}
@@ -68,7 +70,6 @@ function discount_active(PDO $pdo): array
 function discount_regenerate(PDO $pdo, float $budgetPct): array
 {
     $plan = discount_plan($budgetPct, discount_average_order($pdo));
-    $codes = array_column($plan, 'code');
 
     $pdo->beginTransaction();
     try {
@@ -79,9 +80,9 @@ function discount_regenerate(PDO $pdo, float $budgetPct): array
         $ins = $pdo->prepare(
             'INSERT INTO discount_codes (code, kind, pct, max_amount, min_order, first_order_only, active) VALUES (?, ?, ?, ?, ?, ?, 1)'
         );
+        $exists = $pdo->prepare('SELECT COUNT(*) FROM discount_codes WHERE code = ?');
         foreach ($plan as $p) {
             $upd->execute([$p['kind'], $p['pct'], $p['max_amount'], $p['min_order'], $p['first_order_only'] ? 1 : 0, $p['code']]);
-            $exists = $pdo->prepare('SELECT COUNT(*) FROM discount_codes WHERE code = ?');
             $exists->execute([$p['code']]);
             if ((int)$exists->fetchColumn() === 0) {
                 $ins->execute([$p['code'], $p['kind'], $p['pct'], $p['max_amount'], $p['min_order'], $p['first_order_only'] ? 1 : 0]);
@@ -92,7 +93,6 @@ function discount_regenerate(PDO $pdo, float $budgetPct): array
         $pdo->rollBack();
         throw $e;
     }
-    unset($codes);
     return discount_active($pdo);
 }
 
@@ -117,6 +117,7 @@ function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone)
         throw new DiscountError("Add ₹$more more to use {$row['code']}.");
     }
     if ($row['first_order_only']) {
+        $phone = $phone === null ? null : normalize_phone($phone);
         if ($phone === null || $phone === '') {
             throw new DiscountError("Enter your phone number to use {$row['code']}.");
         }
