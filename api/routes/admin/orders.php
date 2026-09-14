@@ -10,6 +10,7 @@ require_once __DIR__ . '/../../../includes/settings.php';
 require_once __DIR__ . '/../../../includes/gst.php';
 require_once __DIR__ . '/../../../includes/order_lines.php';
 require_once __DIR__ . '/../../../includes/order_events.php';
+require_once __DIR__ . '/../../../includes/discounts.php';
 
 /* Resolve posted cart lines into priced order lines. Prices, variant deltas and
    add-on prices are ALWAYS re-read from the DB — the client sends ids and
@@ -75,6 +76,28 @@ function resolve_order_lines(PDO $pdo, array $items): array
     return [$lines, $total];
 }
 
+/* The counter's discount: a code (re-checked against this subtotal and the
+   customer's phone) plus the manual percentage, refused past the ceiling.
+   Returns [$combinedPct, $codeRow|null]. Complimentary orders carry no code. */
+function counter_discount(PDO $pdo, float $subtotal, string $phone, float $manualPct, bool $isComplimentary): array
+{
+    $codeText = trim((string)($_POST['discount_code'] ?? ''));
+    if ($codeText === '' || $isComplimentary) {
+        return [$manualPct, null];
+    }
+    try {
+        $codeRow = discount_check($pdo, $codeText, $subtotal, $phone);
+    } catch (DiscountError $e) {
+        Response::error($e->getMessage(), 422);
+    }
+    if (!discount_combined_ok($codeRow['pct'], $manualPct)) {
+        $m = rtrim(rtrim(number_format($manualPct, 2, '.', ''), '0'), '.');
+        $c = rtrim(rtrim(number_format($codeRow['pct'], 2, '.', ''), '0'), '.');
+        Response::error("Discount ($m %) + code ($c %) exceeds the " . (int)DISCOUNT_CEILING_PCT . " % ceiling.", 422);
+    }
+    return [round($manualPct + $codeRow['pct'], 2), $codeRow];
+}
+
 function route($method, $action, $parts): void
 {
     $admin = require_admin_cap('orders');
@@ -86,7 +109,8 @@ function route($method, $action, $parts): void
         $sql =
             'SELECT o.id, o.name, o.phone, o.occasion, o.needed_on, o.address_text,
                     o.status, o.total_estimate, o.subtotal, o.cgst, o.sgst, o.gst_rate,
-                    o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.discount_pct, o.discount_amount, o.discount_code, o.code_pct, o.code_amount,
+                    o.delivery_charge, o.is_complimentary,
                     o.cancel_acked_at, o.cancel_acked_label, o.cancel_requested_at, o.cancel_requested_label,
                     o.created_at, o.customer_id, o.branch_id,
                     b.name AS branch_name,
@@ -110,6 +134,8 @@ function route($method, $action, $parts): void
             $o['gst_rate']  = (float)$o['gst_rate'];
             $o['discount_pct']     = (float)$o['discount_pct'];
             $o['discount_amount']  = (float)$o['discount_amount'];
+            $o['code_pct']         = (float)$o['code_pct'];
+            $o['code_amount']      = (float)$o['code_amount'];
             $o['delivery_charge']  = (float)$o['delivery_charge'];
             $o['is_complimentary'] = (bool)$o['is_complimentary'];
             $o['item_count'] = (int)$o['item_count'];
@@ -170,7 +196,8 @@ function route($method, $action, $parts): void
                     o.address_text, o.lat, o.lng, o.notes, o.status, o.total_estimate,
                     o.subtotal, o.cgst, o.sgst, o.gst_rate,
                     o.cancel_acked_at, o.cancel_acked_label, o.cancel_requested_at, o.cancel_requested_label,
-                    o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.discount_pct, o.discount_amount, o.discount_code, o.code_pct, o.code_amount,
+                    o.delivery_charge, o.is_complimentary,
                     o.created_at, o.branch_id, b.name AS branch_name
                FROM orders o
                LEFT JOIN branches b ON b.id = o.branch_id
@@ -208,6 +235,8 @@ function route($method, $action, $parts): void
         $order['gst_rate']  = (float)$order['gst_rate'];
         $order['discount_pct']     = (float)$order['discount_pct'];
         $order['discount_amount']  = (float)$order['discount_amount'];
+        $order['code_pct']         = (float)$order['code_pct'];
+        $order['code_amount']      = (float)$order['code_amount'];
         $order['delivery_charge']  = (float)$order['delivery_charge'];
         $order['is_complimentary'] = (bool)$order['is_complimentary'];
         $order['customer_id'] = $order['customer_id'] !== null ? (int)$order['customer_id'] : null;
@@ -412,6 +441,8 @@ function route($method, $action, $parts): void
             Response::error('Please add at least one dish.');
         }
 
+        [$discountPct, $codeRow] = counter_discount($pdo, $total, $phone, $discountPct, $isComplimentary);
+
         $bill = compute_order_total(
             $total,
             (float)setting('gst_rate', '0'),
@@ -420,6 +451,9 @@ function route($method, $action, $parts): void
             $isComplimentary
         );
         $branchId = config()['default_branch_id'] ?? 1;
+        // The code's own rupee amount, straight from discount_check — never
+        // re-derived from the (rounded) combined pct compute_order_total sees.
+        $codeAmount = $codeRow['amount'] ?? 0.0;
 
         $pdo->beginTransaction();
         try {
@@ -442,19 +476,22 @@ function route($method, $action, $parts): void
             $pdo->prepare(
                 'INSERT INTO orders (customer_id, name, phone, needed_on, address_text, lat, lng, notes,
                                      total_estimate, subtotal, cgst, sgst, gst_rate,
-                                     discount_pct, discount_amount, delivery_charge, is_complimentary,
+                                     discount_pct, discount_amount, discount_code, code_pct, code_amount,
+                                     delivery_charge, is_complimentary,
                                      branch_id, status)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             )->execute([$customerId, $name, $phone, $neededOn, $addressText ?: null, $lat, $lng, $notes ?: null,
                         $bill['total'], $bill['subtotal'], $bill['cgst'], $bill['sgst'], $bill['rate'],
-                        $bill['discount_pct'], $bill['discount_amount'], $bill['delivery_charge'],
-                        $bill['complimentary'] ? 1 : 0,
+                        $bill['discount_pct'], $bill['discount_amount'],
+                        $codeRow['code'] ?? null, $codeRow['pct'] ?? 0, $codeAmount,
+                        $bill['delivery_charge'], $bill['complimentary'] ? 1 : 0,
                         $branchId, 'confirmed']);
             $orderId = (int)$pdo->lastInsertId();
 
             insert_order_lines($pdo, $orderId, $lines);
             log_order_event($orderId, 'admin', (int)$admin['id'], (string)$admin['username'], 'created', [
                 'total' => $bill['total'], 'items' => count($lines), 'channel' => 'counter',
+                'code' => $codeRow['code'] ?? null,
             ]);
             $pdo->commit();
         } catch (Throwable $e) {
@@ -527,24 +564,30 @@ function route($method, $action, $parts): void
             Response::error('Please add at least one dish.');
         }
 
+        [$discountPct, $codeRow] = counter_discount($pdo, $subtotal, $phone, $discountPct, $isComplimentary);
+
         // Re-snapshot at the CURRENT gst rate — an edit is a fresh billing
         // decision, so it is priced by today's rules like any other order.
         $bill = compute_order_total($subtotal, (float)setting('gst_rate', '0'),
                                     $discountPct, $deliveryCharge, $isComplimentary);
+        // The code's own rupee amount, straight from discount_check — never
+        // re-derived from the (rounded) combined pct compute_order_total sees.
+        $codeAmount = $codeRow['amount'] ?? 0.0;
 
         $pdo->beginTransaction();
         try {
             $pdo->prepare(
                 'UPDATE orders SET name = ?, phone = ?, needed_on = ?, address_text = ?, lat = ?, lng = ?, notes = ?,
                                    total_estimate = ?, subtotal = ?, cgst = ?, sgst = ?, gst_rate = ?,
-                                   discount_pct = ?, discount_amount = ?, delivery_charge = ?,
-                                   is_complimentary = ?
+                                   discount_pct = ?, discount_amount = ?, discount_code = ?, code_pct = ?, code_amount = ?,
+                                   delivery_charge = ?, is_complimentary = ?
                    WHERE id = ?'
             )->execute([
                 $name, $phone, $neededOn, $addressText ?: null, $lat, $lng, $notes ?: null,
                 $bill['total'], $bill['subtotal'], $bill['cgst'], $bill['sgst'], $bill['rate'],
-                $bill['discount_pct'], $bill['discount_amount'], $bill['delivery_charge'],
-                $bill['complimentary'] ? 1 : 0, $id,
+                $bill['discount_pct'], $bill['discount_amount'],
+                $codeRow['code'] ?? null, $codeRow['pct'] ?? 0, $codeAmount,
+                $bill['delivery_charge'], $bill['complimentary'] ? 1 : 0, $id,
             ]);
             insert_order_lines($pdo, $id, $lines, true);
             $pdo->commit();
@@ -557,7 +600,8 @@ function route($method, $action, $parts): void
         // What actually moved, for the history shown in the drawer.
         $changed = [];
         foreach ([['name', $name], ['phone', $phone], ['needed_on', $neededOn],
-                  ['address_text', $addressText ?: null], ['notes', $notes ?: null]] as [$field, $now]) {
+                  ['address_text', $addressText ?: null], ['notes', $notes ?: null],
+                  ['discount_code', $codeRow['code'] ?? null]] as [$field, $now]) {
             if ((string)$existing[$field] !== (string)$now) {
                 $changed[] = $field;
             }
