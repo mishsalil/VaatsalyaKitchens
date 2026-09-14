@@ -14,6 +14,7 @@ import type {
   AdminSettingsResponse,
   AdminTeamUser,
   AdminReview,
+  AdminDiscountsPayload,
 } from '../types';
 import type { OrderStatus } from '../../shared/types';
 
@@ -60,6 +61,7 @@ export interface AdminNewOrderPayload {
   discount_pct?: number;
   delivery_charge?: number;
   is_complimentary?: boolean;
+  discount_code?: string;
 }
 
 /** Known customer matched by phone during counter entry. */
@@ -273,6 +275,14 @@ export const adminReviewsApi = {
   list: (q: AdminReviewsQuery = {}) =>
     adminApi.get(`reviews${reviewsQueryString(q)}`) as Promise<{ total: number; reviews: AdminReview[] }>,
   ack: (id: number) => adminApi.post(`reviews/ack/${id}`, {}) as Promise<{ success: string }>,
+};
+
+export const adminDiscountsApi = {
+  get: () => adminApi.get('discounts') as Promise<AdminDiscountsPayload>,
+  setBudget: (pct: number) => adminApi.post('discounts/budget', { pct }) as Promise<AdminDiscountsPayload>,
+  regenerate: () => adminApi.post('discounts/regenerate', {}) as Promise<AdminDiscountsPayload>,
+  rename: (id: number, code: string) => adminApi.post(`discounts/rename/${id}`, { code }) as Promise<AdminDiscountsPayload>,
+  setActive: (id: number, active: boolean) => adminApi.post(`discounts/active/${id}`, { active }) as Promise<AdminDiscountsPayload>,
 };
 
 export const adminBroadcastApi = {

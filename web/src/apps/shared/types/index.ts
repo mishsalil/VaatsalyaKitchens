@@ -231,6 +231,10 @@ export interface OrderListItem {
   discount_amount: number;
   delivery_charge: number;
   is_complimentary: boolean;
+  /** Discount code applied at order time, if any. */
+  discount_code: string | null;
+  code_pct: number;
+  code_amount: number;
   /**
    * Seconds left in which the customer may cancel this order themselves.
    * 0 once the window has passed or the kitchen has moved it past Confirmed.
@@ -254,4 +258,13 @@ export interface Order extends OrderListItem {
   lat: number | null;
   lng: number | null;
   notes: string | null;
+}
+
+/** A public discount code offer, as listed for the storefront/till. */
+export interface DiscountOffer {
+  code: string;
+  pct: number;
+  max_amount: number;
+  min_order: number;
+  first_order_only: boolean;
 }

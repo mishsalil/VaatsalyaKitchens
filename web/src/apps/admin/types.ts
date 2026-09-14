@@ -1,4 +1,4 @@
-import type { OrderStatus, OrderItem } from '../shared/types';
+import type { OrderStatus, OrderItem, DiscountOffer } from '../shared/types';
 import type { AdminRole } from './rbac';
 
 export type { AdminRole };
@@ -85,6 +85,10 @@ export interface AdminOrderListItem {
   discount_amount: number;
   delivery_charge: number;
   is_complimentary: boolean;
+  /** Discount code applied at order time, if any. */
+  discount_code: string | null;
+  code_pct: number;
+  code_amount: number;
   /** Set once a rep confirms the kitchen was told about a cancellation (migration_008). */
   cancel_acked_at: string | null;
   cancel_acked_label: string | null;
@@ -243,6 +247,22 @@ export interface AdminOrder extends AdminOrderListItem {
   items: AdminOrderItem[];
   customer: AdminCustomer | null;
   events: AdminOrderEvent[];
+}
+
+/** One discount code as the admin discounts screen manages it. */
+export interface AdminDiscountCode extends DiscountOffer {
+  id: number;
+  kind: 'first' | 'flat' | 'big';
+  active: boolean;
+  created_at: string;
+  uses: number;
+  given: number;
+}
+
+export interface AdminDiscountsPayload {
+  budget_pct: number;
+  average_order: number;
+  codes: AdminDiscountCode[];
 }
 
 /** A team member row (never includes password_hash). */

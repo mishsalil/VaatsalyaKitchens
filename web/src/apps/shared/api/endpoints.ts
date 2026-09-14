@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Address, MeResponse, MenuCategory, MenuHours, MenuItem, Order, OrderListItem } from '../types';
+import type { Address, MeResponse, MenuCategory, MenuHours, MenuItem, Order, OrderListItem, DiscountOffer } from '../types';
 
 export const meApi = {
   me: () => api.get('me') as Promise<MeResponse>,
@@ -39,6 +39,12 @@ export const accountApi = {
   pendingReview: () => api.get('account/pending-review') as Promise<{ order_id: number | null }>,
   /** Mint a rating token for one order, on intent (a tap), not on render. */
   reviewLink: (orderId: number) => api.post('account/review-link', { order_id: orderId }) as Promise<{ token: string }>,
+};
+
+export const discountsApi = {
+  list: () => api.get('discounts') as Promise<{ codes: DiscountOffer[] }>,
+  check: (body: { code: string; subtotal: number; phone: string }) =>
+    api.post('discounts/check', body) as Promise<{ code: string; pct: number; amount: number }>,
 };
 
 export const pushApi = {
