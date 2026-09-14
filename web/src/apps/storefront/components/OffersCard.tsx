@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Tag, X } from 'lucide-react';
 import { discountsApi } from '../../shared/api/endpoints';
 import { useFetch } from '../../shared/hooks/useFetch';
@@ -25,8 +25,13 @@ export function OffersCard({ subtotal, phone, applied, onApply, onRemove }: {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // Generation counter: any apply / remove / re-check bumps it, so a re-check
+  // that resolves after the customer has already removed or swapped the code
+  // is ignored instead of resurrecting it.
+  const gen = useRef(0);
 
   const apply = async (c: string) => {
+    gen.current++;
     setBusy(true); setErr('');
     try {
       onApply(await discountsApi.check({ code: c, subtotal, phone }));
@@ -38,14 +43,15 @@ export function OffersCard({ subtotal, phone, applied, onApply, onRemove }: {
     }
   };
 
+  const remove = () => { gen.current++; onRemove(); };
+
   // Re-check an applied code whenever the cart total or phone changes.
   useEffect(() => {
     if (!applied) return;
-    let stale = false;
+    const g = ++gen.current;
     discountsApi.check({ code: applied.code, subtotal, phone })
-      .then((r) => { if (!stale) onApply(r); })
-      .catch((e) => { if (!stale) { onRemove(); toast.info(`${applied.code} removed: ${(e as Error).message}`); } });
-    return () => { stale = true; };
+      .then((r) => { if (g === gen.current) onApply(r); })
+      .catch((e) => { if (g === gen.current) { remove(); toast.info(`${applied.code} removed: ${(e as Error).message}`); } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subtotal, phone]);
 
@@ -58,7 +64,7 @@ export function OffersCard({ subtotal, phone, applied, onApply, onRemove }: {
       {applied ? (
         <div className="mt-3 flex items-center justify-between rounded-xl border border-brand-900 bg-brand-50 px-4 py-3">
           <span className="flex items-center gap-2 text-sm font-semibold text-brand-900"><Tag className="h-4 w-4" /> {applied.code} · −{rupees(applied.amount)}</span>
-          <button type="button" onClick={onRemove} aria-label="Remove code" className="rounded-full p-1 text-brand-500 hover:bg-cream-100"><X className="h-4 w-4" /></button>
+          <button type="button" onClick={remove} aria-label="Remove code" className="rounded-full p-1 text-brand-500 hover:bg-cream-100"><X className="h-4 w-4" /></button>
         </div>
       ) : (
         <>
