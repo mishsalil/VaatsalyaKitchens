@@ -55,6 +55,7 @@ export interface ReceiptOrder {
   created_at: string;
   items: ReceiptLine[];
   subtotal: number;
+  discount_code?: string | null;
   discount_pct: number;
   discount_amount: number;
   cgst: number;
@@ -203,7 +204,7 @@ export function receiptLines(
     out.push(pair('Subtotal', money(order.subtotal), cols));
   }
   if (order.discount_amount > 0) {
-    out.push(pair(`Discount (${order.discount_pct}%)`, '-' + money(order.discount_amount), cols));
+    out.push(pair(`${order.discount_code ?? 'Discount'} (${order.discount_pct}%)`, '-' + money(order.discount_amount), cols));
   }
   if (!order.is_complimentary && order.gst_rate > 0) {
     out.push(pair(`CGST (${order.gst_rate / 2}%)`, money(order.cgst), cols));

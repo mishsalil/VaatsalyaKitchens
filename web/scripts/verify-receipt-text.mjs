@@ -107,6 +107,12 @@ for (const width of [58, 80]) {
       lines.some((l) => l.startsWith('SGST')));
 }
 
+// A code-based discount names the code on its own line instead of "Discount".
+console.log('\ncode discount');
+const codeOrder = { ...order, discount_code: 'VK10', discount_pct: 10, discount_amount: 50 };
+const codeLines = receipt.receiptLines(codeOrder, business, 58);
+check('discount line starts with the code', codeLines.some((l) => l.startsWith('VK10 (10%)')));
+
 // wrap() is where a bad line length would come from, so probe it directly.
 console.log('\nwrap()');
 const longWord = 'Supercalifragilisticexpialidocious'.repeat(2);
