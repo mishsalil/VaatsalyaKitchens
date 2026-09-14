@@ -459,6 +459,20 @@ CREATE TABLE IF NOT EXISTS menu_item_addons (
     REFERENCES menu_items (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+CREATE TABLE IF NOT EXISTS discount_codes (
+  id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  code             VARCHAR(20)  NOT NULL,
+  kind             ENUM('first','flat','big') NOT NULL,
+  pct              DECIMAL(5,2) NOT NULL,
+  max_amount       DECIMAL(10,2) NOT NULL,
+  min_order        DECIMAL(10,2) NOT NULL DEFAULT 0,
+  first_order_only TINYINT(1)   NOT NULL DEFAULT 0,
+  active           TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_discount_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE order_items ADD COLUMN variant_name VARCHAR(80) NULL AFTER item_name')
   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_name');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
@@ -506,6 +520,18 @@ PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE order_items ADD COLUMN variant_ids VARCHAR(255) NULL AFTER variant_id')
   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_ids');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE orders ADD COLUMN discount_code VARCHAR(20) NULL AFTER discount_pct')
+  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='discount_code');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE orders ADD COLUMN code_pct DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER discount_code')
+  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='code_pct');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE orders ADD COLUMN code_amount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER code_pct')
+  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='code_amount');
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 CREATE TABLE IF NOT EXISTS order_events (
@@ -693,7 +719,11 @@ UNION ALL SELECT 'table auth_tokens',               IF(COUNT(*)=1,'OK','MISSING'
 UNION ALL SELECT 'table fcm_tokens',                IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='fcm_tokens'
 UNION ALL SELECT 'kitchen_hours seeded',            IF(COUNT(*) >= 1,'OK','EMPTY') FROM kitchen_hours
 UNION ALL SELECT 'menu_item_variants.group_label', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='menu_item_variants' AND COLUMN_NAME='group_label'
-UNION ALL SELECT 'order_items.variant_ids', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_ids';
+UNION ALL SELECT 'order_items.variant_ids', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_ids'
+UNION ALL SELECT 'discount_codes', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='discount_codes'
+UNION ALL SELECT 'orders.discount_code', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='discount_code'
+UNION ALL SELECT 'orders.code_pct', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='code_pct'
+UNION ALL SELECT 'orders.code_amount', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='code_amount';
 
 -- --- migration_013: ratings and reviews (phase 1) --------------------------
 CREATE TABLE IF NOT EXISTS order_reviews (

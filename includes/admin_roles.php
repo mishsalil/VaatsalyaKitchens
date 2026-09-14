@@ -47,8 +47,8 @@ function admin_role_valid(string $role): bool
 function admin_caps_for_role(string $role): array
 {
     return match ($role) {
-        'super'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print', 'reviews'],
-        'admin'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'print', 'reviews'],
+        'super'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'roles', 'print', 'reviews', 'discounts'],
+        'admin'   => ['dashboard', 'orders', 'new_order', 'menu', 'customers', 'broadcast', 'settings', 'print', 'reviews', 'discounts'],
         'manager' => ['dashboard', 'orders', 'new_order', 'menu', 'broadcast', 'print', 'reviews'],
         'staff'   => ['dashboard', 'orders', 'new_order', 'print', 'reviews'],
         'rider'   => ['dashboard', 'orders', 'print'],

@@ -52,6 +52,10 @@ function settings_defaults(): array
            rating. Both blank = neither feature appears. */
         'google_review_url'    => '',
         'google_place_id'      => '',
+        /* Discount budget, percent of sales the kitchen is willing to give
+           away. includes/discounts.php turns it into codes; "0" = no codes.
+           Owned by api/routes/admin/discounts.php, not the Settings page. */
+        'discount_budget_pct'  => '0',
     ];
 }
 
