@@ -4,7 +4,7 @@ import { Search, Minus, X, Check, Printer, UserCheck, Gift, MessageCircle, Clock
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { adminOrdersApi, type AdminNewOrderLine } from '../api/endpoints';
-import { discountsApi, menuApi } from '../../shared/api/endpoints';
+import { menuApi } from '../../shared/api/endpoints';
 import { computeOrderTotal } from '../../shared/lib/gst';
 import { codeAmount, discountMeter } from '../../shared/lib/discounts';
 import { defaultNeededOnLocal, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
@@ -242,7 +242,7 @@ export function AdminNewOrder() {
         // The stored discount_pct is manual + code; split the code's share
         // back out so the manual box shows only what the rep typed.
         const manualPct = order.discount_code
-          ? Math.round((order.discount_pct - order.code_pct) * 100) / 100
+          ? Math.max(0, Math.round((order.discount_pct - order.code_pct) * 100) / 100)
           : order.discount_pct;
         setDiscountPct(manualPct ? String(manualPct) : '');
         setDeliveryCharge(order.delivery_charge ? String(order.delivery_charge) : '');
@@ -452,13 +452,19 @@ export function AdminNewOrder() {
   const appliedAmount = applied ? codeAmount(subtotal, applied.pct, Infinity) : 0;
   const manualAmount = Math.round((bill.discountAmount - appliedAmount) * 100) / 100;
 
+  // The counter's own check: unlike the public discounts/check it can exclude
+  // the order being edited, so a first-order code isn't refused by its own row.
+  const checkCode = (c: string) =>
+    adminOrdersApi.checkCode({ code: c, subtotal, phone: normalizePhone(phone) ?? '', order_id: editId ?? undefined });
+
   const applyCode = async (c: string) => {
-    codeGen.current++;
+    const g = ++codeGen.current;
     setCodeBusy(true); setCodeErr('');
     try {
-      setApplied(await discountsApi.check({ code: c, subtotal, phone: normalizePhone(phone) ?? '' }));
+      const r = await checkCode(c);
+      if (g === codeGen.current) setApplied(r);
     } catch (e) {
-      setCodeErr((e as Error).message);
+      if (g === codeGen.current) setCodeErr((e as Error).message);
     } finally {
       setCodeBusy(false);
     }
@@ -467,14 +473,11 @@ export function AdminNewOrder() {
   const removeCode = () => { codeGen.current++; setApplied(null); setCodeText(''); setCodeErr(''); };
 
   // Re-check an applied code whenever the bill or phone changes; drop it with
-  // the server's reason when it no longer qualifies. Not while editing: the
-  // public /check can't exclude the order's own row, so a first-order code
-  // would fail against itself — admin/orders/update re-validates with that
-  // exclusion and refuses with its own message if the code no longer fits.
+  // the server's reason when it no longer qualifies.
   useEffect(() => {
-    if (!applied || editId !== null) return;
+    if (!applied) return;
     const g = ++codeGen.current;
-    discountsApi.check({ code: applied.code, subtotal, phone: normalizePhone(phone) ?? '' })
+    checkCode(applied.code)
       .then((r) => { if (g === codeGen.current) setApplied(r); })
       .catch((e) => {
         if (g !== codeGen.current) return;

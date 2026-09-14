@@ -82,6 +82,9 @@ export const adminOrdersApi = {
     adminApi.get(`orders/lookup_customer?phone=${encodeURIComponent(phone)}`) as Promise<{ customer: AdminLookupCustomer | null }>,
   create: (data: AdminNewOrderPayload) =>
     adminApi.post('orders/create', data) as Promise<{ order_id: number; total: number; complimentary: boolean }>,
+  /** What a discount code is worth for a counter bill; order_id excludes the order being edited from first-order checks. */
+  checkCode: (body: { code: string; subtotal: number; phone: string; order_id?: number }) =>
+    adminApi.post('orders/check_code', body) as Promise<{ code: string; pct: number; amount: number }>,
   /** Edit an existing order — same payload as create; prices are re-resolved server-side. */
   update: (id: number, data: AdminNewOrderPayload) =>
     adminApi.post(`orders/update/${id}`, data) as Promise<{

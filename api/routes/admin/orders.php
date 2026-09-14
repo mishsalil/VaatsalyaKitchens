@@ -4,6 +4,7 @@
    POST /api/admin/orders/update_status/{id} — change status; pushes the customer on change.
    GET  /api/admin/orders/lookup_customer  ?phone= → known customer + last address.
    POST /api/admin/orders/create           — counter order entry (cap: new_order).
+   POST /api/admin/orders/check_code       — value of a discount code for a counter bill (order_id excludes the order being edited).
    The VKADMIN session is started by api/index.php; every action requires an admin. */
 require_once __DIR__ . '/../../../includes/push.php';
 require_once __DIR__ . '/../../../includes/settings.php';
@@ -398,6 +399,23 @@ function route($method, $action, $parts): void
             'token' => review_token_issue($orderId),
             'days'  => REVIEW_TOKEN_DAYS,
         ]);
+    }
+
+    // --- check_code: what a discount code is worth for this bill (counter) ---
+    // The public discounts/check can't exclude an order's own row, so a
+    // first-order code would fail against itself on an edit; order_id lets the
+    // counter re-check a code on the order being edited.
+    if ($action === 'check_code' && $method === 'POST') {
+        $code     = (string)($_POST['code'] ?? '');
+        $subtotal = (float)($_POST['subtotal'] ?? 0);
+        $phone    = normalize_phone((string)($_POST['phone'] ?? ''));
+        $orderId  = (int)($_POST['order_id'] ?? 0);
+        try {
+            $r = discount_check(db(), $code, $subtotal, $phone, $orderId > 0 ? $orderId : null);
+        } catch (DiscountError $e) {
+            Response::error($e->getMessage(), 422);
+        }
+        Response::json(['code' => $r['code'], 'pct' => $r['pct'], 'amount' => $r['amount']]);
     }
 
     // --- counter order entry ---
