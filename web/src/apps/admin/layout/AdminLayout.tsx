@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, useNavigate, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, UtensilsCrossed, Users, Bell, Settings as SettingsIcon,
-  LogOut, Menu, X, KeyRound, UserCog, PlusCircle, MessageSquare,
+  LogOut, Menu, X, KeyRound, UserCog, PlusCircle, MessageSquare, Percent,
 } from 'lucide-react';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { can, type AdminCap, roleLabel } from '../rbac';
@@ -21,6 +21,7 @@ const NAV: NavItem[] = [
   { to: '/admin/menu', label: 'Menu', icon: UtensilsCrossed, cap: 'menu' },
   { to: '/admin/customers', label: 'Customers', icon: Users, cap: 'customers' },
   { to: '/admin/reviews', label: 'Reviews', icon: MessageSquare, cap: 'reviews' },
+  { to: '/admin/discounts', label: 'Discounts', icon: Percent, cap: 'discounts' },
   { to: '/admin/broadcast', label: 'Broadcast', icon: Bell, cap: 'broadcast' },
   { to: '/admin/settings', label: 'Settings', icon: SettingsIcon, cap: 'settings' },
   { to: '/admin/team', label: 'Team', icon: UserCog, cap: 'roles' },

@@ -10,6 +10,7 @@ import { AdminOrders } from './pages/Orders';
 import { AdminMenu } from './pages/Menu';
 import { AdminCustomers } from './pages/Customers';
 import { AdminReviews } from './pages/Reviews';
+import { AdminDiscounts } from './pages/Discounts';
 import { AdminBroadcast } from './pages/Broadcast';
 import { AdminSettings } from './pages/Settings';
 import { AdminTeam } from './pages/Team';
@@ -57,6 +58,7 @@ export default function AdminArea() {
           <Route path="menu" element={<RequireCap cap="menu"><AdminMenu /></RequireCap>} />
           <Route path="customers" element={<RequireCap cap="customers"><AdminCustomers /></RequireCap>} />
           <Route path="reviews" element={<RequireCap cap="reviews"><AdminReviews /></RequireCap>} />
+          <Route path="discounts" element={<RequireCap cap="discounts"><AdminDiscounts /></RequireCap>} />
           <Route path="broadcast" element={<RequireCap cap="broadcast"><AdminBroadcast /></RequireCap>} />
           <Route path="settings" element={<RequireCap cap="settings"><AdminSettings /></RequireCap>} />
           <Route path="team" element={<RequireCap cap="roles"><AdminTeam /></RequireCap>} />
