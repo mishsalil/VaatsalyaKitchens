@@ -473,17 +473,21 @@ export function AdminNewOrder() {
   const removeCode = () => { codeGen.current++; setApplied(null); setCodeText(''); setCodeErr(''); };
 
   // Re-check an applied code whenever the bill or phone changes; drop it with
-  // the server's reason when it no longer qualifies.
+  // the server's reason when it no longer qualifies. Debounced so a phone
+  // being typed sends one request, not one per keystroke.
   useEffect(() => {
     if (!applied) return;
     const g = ++codeGen.current;
-    checkCode(applied.code)
-      .then((r) => { if (g === codeGen.current) setApplied(r); })
-      .catch((e) => {
-        if (g !== codeGen.current) return;
-        setApplied(null);
-        setCodeErr(`${applied.code} removed: ${(e as Error).message}`);
-      });
+    const t = setTimeout(() => {
+      checkCode(applied.code)
+        .then((r) => { if (g === codeGen.current) setApplied(r); })
+        .catch((e) => {
+          if (g !== codeGen.current) return;
+          setApplied(null);
+          setCodeErr(`${applied.code} removed: ${(e as Error).message}`);
+        });
+    }, 400);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subtotal, phone]);
 

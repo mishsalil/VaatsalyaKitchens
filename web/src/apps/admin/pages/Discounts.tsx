@@ -262,6 +262,9 @@ export function AdminDiscounts() {
                 Save
               </button>
             </div>
+            <p className="mt-2 text-xs text-brand-500">
+              Regenerate switches every code back on and refreshes VK&lt;n&gt; from the budget; WELCOME and FEAST keep their names.
+            </p>
             {regenerated !== null && (
               <p className="mt-2 text-sm text-green-700">Codes regenerated: {regenerated}</p>
             )}

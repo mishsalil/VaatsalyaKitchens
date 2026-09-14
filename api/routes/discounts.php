@@ -24,13 +24,15 @@ function route($method, $action, $parts): void
         if (too_many_attempts('code:' . $ip, 30, 15)) {
             Response::error('Too many tries. Please wait a few minutes.', 429);
         }
-        record_attempt('code:' . $ip);
         $code     = (string)($_POST['code'] ?? '');
         $subtotal = (float)($_POST['subtotal'] ?? 0);
         $phone    = normalize_phone((string)($_POST['phone'] ?? ''));
         try {
             $r = discount_check(db(), $code, $subtotal, $phone);
         } catch (DiscountError $e) {
+            // Only a refusal counts as a try: a customer re-checking a valid
+            // code as their cart changes must not be locked out.
+            record_attempt('code:' . $ip);
             Response::error($e->getMessage(), 422);
         }
         Response::json(['code' => $r['code'], 'pct' => $r['pct'], 'amount' => $r['amount']]);

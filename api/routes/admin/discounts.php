@@ -60,7 +60,15 @@ function route($method, $action, $parts): void
         if ((int)$dup->fetchColumn() > 0) {
             Response::error('That code is already in use.', 422);
         }
-        $pdo->prepare('UPDATE discount_codes SET code = ? WHERE id = ?')->execute([$code, $id]);
+        try {
+            $pdo->prepare('UPDATE discount_codes SET code = ? WHERE id = ?')->execute([$code, $id]);
+        } catch (PDOException $e) {
+            // Two admins renaming at once: the UNIQUE key is the real check.
+            if ($e->getCode() === '23000') {
+                Response::error('That code is already in use.', 422);
+            }
+            throw $e;
+        }
         Response::json(discounts_payload($pdo));
     }
     if ($action === 'active' && $method === 'POST') {

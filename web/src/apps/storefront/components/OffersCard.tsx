@@ -45,13 +45,18 @@ export function OffersCard({ subtotal, phone, applied, onApply, onRemove }: {
 
   const remove = () => { gen.current++; onRemove(); };
 
-  // Re-check an applied code whenever the cart total or phone changes.
+  // Re-check an applied code whenever the cart total or phone changes, after
+  // a short pause so a phone being typed or a quantity being tapped up sends
+  // one request, not one per keystroke.
   useEffect(() => {
     if (!applied) return;
     const g = ++gen.current;
-    discountsApi.check({ code: applied.code, subtotal, phone })
-      .then((r) => { if (g === gen.current) onApply(r); })
-      .catch((e) => { if (g === gen.current) { remove(); toast.info(`${applied.code} removed: ${(e as Error).message}`); } });
+    const t = setTimeout(() => {
+      discountsApi.check({ code: applied.code, subtotal, phone })
+        .then((r) => { if (g === gen.current) onApply(r); })
+        .catch((e) => { if (g === gen.current) { remove(); toast.info(`${applied.code} removed: ${(e as Error).message}`); } });
+    }, 400);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subtotal, phone]);
 
