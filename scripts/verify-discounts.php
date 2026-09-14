@@ -51,7 +51,7 @@ $pdo->exec("CREATE TABLE discount_codes (
   first_order_only TINYINT(1) NOT NULL DEFAULT 0, active TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uq_discount_code (code))");
 $pdo->exec("CREATE TABLE orders (id INT UNSIGNED NOT NULL AUTO_INCREMENT, phone VARCHAR(20) NOT NULL,
-  status VARCHAR(20) NOT NULL DEFAULT 'new', subtotal DECIMAL(10,2) NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'new', subtotal DECIMAL(10,2) NOT NULL DEFAULT 0, discount_code VARCHAR(20) NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id))");
 
 try {
@@ -101,6 +101,34 @@ try {
         refused(fn() => discount_check($pdo, 'WELCOME', 500, '919000000004')));
     check('first-order: excluding the order being edited, still first', 75.0,
         discount_check($pdo, 'WELCOME', 500, '919000000004', $editOrderId)['amount']);
+    check('cap binds: amount is what the 2-dp pct yields', [8.09, 100.0], // 1236.14 × 8.09 % = 100.00, not the raw ₹100 cap
+        [discount_check($pdo, 'WELCOME', 1236.14, '919000000005')['pct'], discount_check($pdo, 'WELCOME', 1236.14, '919000000005')['amount']]);
+    check('cap binds: amount recomputed from the 2-dp pct (±₹0.40)', [7.99, 149.92],
+        [discount_check($pdo, 'VK10', 1876.33, null)['pct'], discount_check($pdo, 'VK10', 1876.33, null)['amount']]);
+
+    echo "\ndiscount_check: an edited order keeps its own code\n";
+    $pdo->exec("INSERT INTO orders (phone, status, subtotal, discount_code) VALUES ('919000000006', 'new', 1000, 'VK10')");
+    $ownOrderId = (int)$pdo->lastInsertId();
+    $pdo->exec("INSERT INTO orders (phone, status, subtotal, discount_code) VALUES ('919000000006', 'new', 1000, 'WELCOME')");
+    $ownWelcomeId = (int)$pdo->lastInsertId();
+    discount_regenerate($pdo, 12);   // VK10 switched off
+    check('own code, now inactive, still honoured', 100.0, discount_check($pdo, 'VK10', 1000, '919000000006', $ownOrderId)['amount']);
+    check('same inactive code on a different order refused', "That code isn't valid.",
+        refused(fn() => discount_check($pdo, 'VK10', 1000, '919000000006', $ownWelcomeId)));
+    check('own first-order code skips the first-order check', 100.0,
+        discount_check($pdo, 'WELCOME', 1000, '919000000006', $ownWelcomeId)['amount']);
+    check('a different first-order code on that phone is still refused', 'WELCOME is for your first order only.',
+        refused(fn() => discount_check($pdo, 'WELCOME', 1000, '919000000006', $ownOrderId)));
+    check('own code still needs its floor', 'Add ₹150 more to use VK10.', refused(fn() => discount_check($pdo, 'VK10', 350, null, $ownOrderId)));
+    discount_regenerate($pdo, 10);
+
+    echo "\ndiscount_regenerate keeps a marketing rename\n";
+    $pdo->exec("UPDATE discount_codes SET code = 'DIWALI' WHERE code = 'WELCOME'");
+    $active = discount_regenerate($pdo, 10);
+    check('renamed first-order code keeps its name', ['DIWALI', 'VK10', 'FEAST'], array_column($active, 'code'));
+    check('no WELCOME row re-inserted', 0, (int)$pdo->query("SELECT COUNT(*) FROM discount_codes WHERE code = 'WELCOME'")->fetchColumn());
+    $active = discount_regenerate($pdo, 12);
+    check('rename survives a budget change too', ['DIWALI', 'VK12', 'FEAST'], array_column($active, 'code'));
 } finally {
     $pdo->exec("DROP DATABASE IF EXISTS `$dbName`");
 }

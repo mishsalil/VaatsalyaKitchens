@@ -64,8 +64,11 @@ function discount_active(PDO $pdo): array
 
 /**
  * Apply the plan for a budget: every active row not in the plan is switched
- * off, a row whose code text matches is updated in place (keeps its id and
- * any usage history), the rest are inserted. Returns the active rows.
+ * off, then each planned code is written onto an existing row (keeps its id
+ * and any usage history) or inserted. The first-order and big codes match by
+ * KIND — the most recent row of that kind keeps whatever name marketing gave
+ * it — while the flat code matches by TEXT, because VK<n> is the budget and a
+ * new budget is a new code. Returns the active rows.
  */
 function discount_regenerate(PDO $pdo, float $budgetPct): array
 {
@@ -74,17 +77,21 @@ function discount_regenerate(PDO $pdo, float $budgetPct): array
     $pdo->beginTransaction();
     try {
         $pdo->exec('UPDATE discount_codes SET active = 0');
+        $byKind = $pdo->prepare('SELECT id FROM discount_codes WHERE kind = ? ORDER BY active DESC, id DESC LIMIT 1');
+        $byCode = $pdo->prepare('SELECT id FROM discount_codes WHERE code = ?');
         $upd = $pdo->prepare(
-            'UPDATE discount_codes SET kind = ?, pct = ?, max_amount = ?, min_order = ?, first_order_only = ?, active = 1 WHERE code = ?'
+            'UPDATE discount_codes SET pct = ?, max_amount = ?, min_order = ?, first_order_only = ?, active = 1 WHERE id = ?'
         );
         $ins = $pdo->prepare(
             'INSERT INTO discount_codes (code, kind, pct, max_amount, min_order, first_order_only, active) VALUES (?, ?, ?, ?, ?, ?, 1)'
         );
-        $exists = $pdo->prepare('SELECT COUNT(*) FROM discount_codes WHERE code = ?');
         foreach ($plan as $p) {
-            $upd->execute([$p['kind'], $p['pct'], $p['max_amount'], $p['min_order'], $p['first_order_only'] ? 1 : 0, $p['code']]);
-            $exists->execute([$p['code']]);
-            if ((int)$exists->fetchColumn() === 0) {
+            $find = $p['kind'] === 'flat' ? $byCode : $byKind;
+            $find->execute([$p['kind'] === 'flat' ? $p['code'] : $p['kind']]);
+            $id = $find->fetchColumn();
+            if ($id !== false) {
+                $upd->execute([$p['pct'], $p['max_amount'], $p['min_order'], $p['first_order_only'] ? 1 : 0, (int)$id]);
+            } else {
                 $ins->execute([$p['code'], $p['kind'], $p['pct'], $p['max_amount'], $p['min_order'], $p['first_order_only'] ? 1 : 0]);
             }
         }
@@ -99,14 +106,27 @@ function discount_regenerate(PDO $pdo, float $budgetPct): array
 /**
  * What a code is worth for this cart. Throws DiscountError with the exact
  * sentence the customer sees. The phone is needed only for first-order codes.
- * $excludeOrderId excludes that order's own row from the first-order count —
- * pass the order's id when re-checking a code on an edit, so an order does
- * not disqualify itself from the first-order code it was placed with.
+ * $excludeOrderId is the order being edited. An order keeps the code it was
+ * placed with: if that order's stored discount_code is the one requested, the
+ * code is honoured even if it has since been switched off, and the first-order
+ * check is skipped (the order already passed it). Any other code is checked
+ * as for a new order, except that the order's own row does not count against
+ * a first-order code.
+ *
+ * The rupee cap is approximate (within ±₹0.40): the order stores a 2-dp
+ * percentage, so the amount returned is what that percentage yields on this
+ * subtotal, which is exactly what compute_order_total() will bill.
  */
 function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone, ?int $excludeOrderId = null): array
 {
     $code = strtoupper(trim($code));
-    $stmt = $pdo->prepare('SELECT * FROM discount_codes WHERE code = ? AND active = 1');
+    $ownCode = false;
+    if ($excludeOrderId !== null) {
+        $own = $pdo->prepare('SELECT discount_code FROM orders WHERE id = ?');
+        $own->execute([$excludeOrderId]);
+        $ownCode = (string)$own->fetchColumn() === $code && $code !== '';
+    }
+    $stmt = $pdo->prepare('SELECT * FROM discount_codes WHERE code = ?' . ($ownCode ? '' : ' AND active = 1'));
     $stmt->execute([$code]);
     $row = $stmt->fetch();
     if (!$row) {
@@ -119,7 +139,7 @@ function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone,
         $more = (int)ceil($row['min_order'] - $subtotal);
         throw new DiscountError("Add ₹$more more to use {$row['code']}.");
     }
-    if ($row['first_order_only']) {
+    if ($row['first_order_only'] && !$ownCode) {
         $phone = $phone === null ? null : normalize_phone($phone);
         if ($phone === null || $phone === '') {
             throw new DiscountError("Enter your phone number to use {$row['code']}.");
@@ -138,6 +158,7 @@ function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone,
     }
     $amount = min(round($subtotal * $row['pct'] / 100.0, 2), $row['max_amount']);
     $pct = $subtotal > 0 ? round($amount / $subtotal * 100.0, 2) : 0.0;
+    $amount = round($subtotal * $pct / 100.0, 2);
     return [
         'code'       => $row['code'],
         'pct'        => $pct,
