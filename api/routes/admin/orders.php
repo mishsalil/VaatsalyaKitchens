@@ -77,16 +77,20 @@ function resolve_order_lines(PDO $pdo, array $items): array
 }
 
 /* The counter's discount: a code (re-checked against this subtotal and the
-   customer's phone) plus the manual percentage, refused past the ceiling.
-   Returns [$combinedPct, $codeRow|null]. Complimentary orders carry no code. */
-function counter_discount(PDO $pdo, float $subtotal, string $phone, float $manualPct, bool $isComplimentary): array
+   customer's phone — on an edit, the phone as just resubmitted, since an edit
+   is a fresh billing decision, not a re-check of the original) plus the
+   manual percentage, refused past the ceiling. $excludeOrderId is the order
+   being edited, so a first-order code isn't disqualified by the very order it
+   was placed on; pass null from create. Returns [$combinedPct, $codeRow|null].
+   Complimentary orders carry no code. */
+function counter_discount(PDO $pdo, float $subtotal, string $phone, float $manualPct, bool $isComplimentary, string $codeText, ?int $excludeOrderId = null): array
 {
-    $codeText = trim((string)($_POST['discount_code'] ?? ''));
+    $codeText = trim($codeText);
     if ($codeText === '' || $isComplimentary) {
         return [$manualPct, null];
     }
     try {
-        $codeRow = discount_check($pdo, $codeText, $subtotal, $phone);
+        $codeRow = discount_check($pdo, $codeText, $subtotal, $phone, $excludeOrderId);
     } catch (DiscountError $e) {
         Response::error($e->getMessage(), 422);
     }
@@ -441,7 +445,8 @@ function route($method, $action, $parts): void
             Response::error('Please add at least one dish.');
         }
 
-        [$discountPct, $codeRow] = counter_discount($pdo, $total, $phone, $discountPct, $isComplimentary);
+        [$discountPct, $codeRow] = counter_discount($pdo, $total, $phone, $discountPct, $isComplimentary,
+            (string)($_POST['discount_code'] ?? ''));
 
         $bill = compute_order_total(
             $total,
@@ -564,7 +569,8 @@ function route($method, $action, $parts): void
             Response::error('Please add at least one dish.');
         }
 
-        [$discountPct, $codeRow] = counter_discount($pdo, $subtotal, $phone, $discountPct, $isComplimentary);
+        [$discountPct, $codeRow] = counter_discount($pdo, $subtotal, $phone, $discountPct, $isComplimentary,
+            (string)($_POST['discount_code'] ?? ''), $id);
 
         // Re-snapshot at the CURRENT gst rate — an edit is a fresh billing
         // decision, so it is priced by today's rules like any other order.

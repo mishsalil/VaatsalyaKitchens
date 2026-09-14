@@ -99,8 +99,11 @@ function discount_regenerate(PDO $pdo, float $budgetPct): array
 /**
  * What a code is worth for this cart. Throws DiscountError with the exact
  * sentence the customer sees. The phone is needed only for first-order codes.
+ * $excludeOrderId excludes that order's own row from the first-order count —
+ * pass the order's id when re-checking a code on an edit, so an order does
+ * not disqualify itself from the first-order code it was placed with.
  */
-function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone): array
+function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone, ?int $excludeOrderId = null): array
 {
     $code = strtoupper(trim($code));
     $stmt = $pdo->prepare('SELECT * FROM discount_codes WHERE code = ? AND active = 1');
@@ -121,8 +124,14 @@ function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone)
         if ($phone === null || $phone === '') {
             throw new DiscountError("Enter your phone number to use {$row['code']}.");
         }
-        $prev = $pdo->prepare("SELECT COUNT(*) FROM orders WHERE phone = ? AND status <> 'cancelled'");
-        $prev->execute([$phone]);
+        $sql = "SELECT COUNT(*) FROM orders WHERE phone = ? AND status <> 'cancelled'";
+        $args = [$phone];
+        if ($excludeOrderId !== null) {
+            $sql .= ' AND id <> ?';
+            $args[] = $excludeOrderId;
+        }
+        $prev = $pdo->prepare($sql);
+        $prev->execute($args);
         if ((int)$prev->fetchColumn() > 0) {
             throw new DiscountError("{$row['code']} is for your first order only.");
         }

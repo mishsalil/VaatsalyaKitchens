@@ -94,6 +94,13 @@ try {
     check('big: 15 % of 1000 = 150', 150.0, discount_check($pdo, 'FEAST', 1000, null)['amount']);
     check('first-order: phone with spaces, no country code, still normalizes', 'WELCOME is for your first order only.', refused(fn() => discount_check($pdo, 'WELCOME', 500, '90000 00001')));
     check('first-order: unparseable phone', 'Enter your phone number to use WELCOME.', refused(fn() => discount_check($pdo, 'WELCOME', 500, 'abc')));
+
+    $pdo->exec("INSERT INTO orders (phone, status, subtotal) VALUES ('919000000004', 'new', 500)");
+    $editOrderId = (int)$pdo->lastInsertId();
+    check('first-order: own new order (status new) counts against itself', 'WELCOME is for your first order only.',
+        refused(fn() => discount_check($pdo, 'WELCOME', 500, '919000000004')));
+    check('first-order: excluding the order being edited, still first', 75.0,
+        discount_check($pdo, 'WELCOME', 500, '919000000004', $editOrderId)['amount']);
 } finally {
     $pdo->exec("DROP DATABASE IF EXISTS `$dbName`");
 }
