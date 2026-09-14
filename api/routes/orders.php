@@ -4,6 +4,7 @@
    GET  /api/orders/show/{id}     — one owned order + items. */
 require_once __DIR__ . '/../../includes/settings.php';
 require_once __DIR__ . '/../../includes/gst.php';
+require_once __DIR__ . '/../../includes/discounts.php';
 require_once __DIR__ . '/../../includes/order_lines.php';
 require_once __DIR__ . '/../../includes/order_events.php';
 require_once __DIR__ . '/../../includes/push.php';
@@ -165,10 +166,22 @@ function route($method, $action, $parts): void
             );
         }
 
+        /* A discount code, re-checked here with the recomputed subtotal and
+           the posted phone — the client's figure is never trusted. */
+        $codeRow = null;
+        $codeText = trim((string)($_POST['discount_code'] ?? ''));
+        if ($codeText !== '') {
+            try {
+                $codeRow = discount_check($pdo, $codeText, $total, $phone);
+            } catch (DiscountError $e) {
+                Response::error($e->getMessage(), 422);
+            }
+        }
+
         // Tax-exclusive GST snapshot — the breakdown is frozen on the order so
         // editing the rate later never changes a past bill. Menu prices are
         // pre-tax; the customer pays the grand total (total_estimate).
-        $gst = compute_gst($total, (float)setting('gst_rate', '0'));
+        $gst = compute_order_total($total, (float)setting('gst_rate', '0'), $codeRow['pct'] ?? 0.0);
 
         $pdo = db();
         $pdo->beginTransaction();
@@ -202,20 +215,28 @@ function route($method, $action, $parts): void
                 }
             }
 
+            // The code's own rupee amount, straight from discount_check — never
+            // re-derived from the (rounded) pct compute_order_total returns.
+            $codeAmount = $codeRow['amount'] ?? 0.0;
+
             $pdo->prepare(
                 'INSERT INTO orders (customer_id, name, phone, occasion, needed_on, needed_at,
                                      address_text, lat, lng, notes,
-                                     total_estimate, subtotal, cgst, sgst, gst_rate, branch_id)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                     total_estimate, subtotal, cgst, sgst, gst_rate, branch_id,
+                                     discount_pct, discount_amount, discount_code, code_pct, code_amount)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             )->execute([$customerId, $name, $phone, $occasion ?: null, $neededOn,
                         $neededAt->format('Y-m-d H:i:s'),
                         $addressText ?: null, $lat, $lng, $notes ?: null,
-                        $gst['total'], $gst['subtotal'], $gst['cgst'], $gst['sgst'], $gst['rate'], $branchId]);
+                        $gst['total'], $gst['subtotal'], $gst['cgst'], $gst['sgst'], $gst['rate'], $branchId,
+                        $gst['discount_pct'], $gst['discount_amount'], $codeRow['code'] ?? null,
+                        $gst['discount_pct'], $codeAmount]);
             $orderId = (int)$pdo->lastInsertId();
 
             insert_order_lines($pdo, $orderId, $lines);
             log_order_event($orderId, 'customer', $customerId, $name, 'created', [
                 'total' => $gst['total'], 'items' => count($lines), 'channel' => 'storefront',
+                'code' => $codeRow['code'] ?? null,
             ]);
             $pdo->commit();
         } catch (Throwable $e) {
@@ -242,7 +263,8 @@ function route($method, $action, $parts): void
         $stmt = db()->prepare(
             'SELECT o.id, o.occasion, o.needed_on, o.address_text, o.status,
                     o.total_estimate, o.subtotal, o.cgst, o.sgst, o.gst_rate,
-                    o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.discount_pct, o.discount_amount, o.discount_code, o.code_pct, o.code_amount,
+                    o.delivery_charge, o.is_complimentary,
                     o.cancel_requested_at,
                     o.cancel_requested_at,
                     o.created_at, b.name AS branch_name,
@@ -266,6 +288,8 @@ function route($method, $action, $parts): void
             $o['gst_rate']  = (float)$o['gst_rate'];
             $o['discount_pct']     = (float)$o['discount_pct'];
             $o['discount_amount']  = (float)$o['discount_amount'];
+            $o['code_pct']         = (float)$o['code_pct'];
+            $o['code_amount']      = (float)$o['code_amount'];
             $o['delivery_charge']  = (float)$o['delivery_charge'];
             $o['is_complimentary'] = (bool)$o['is_complimentary'];
             $o['cancel_seconds_left'] = cancel_seconds_left($o['status'], (int)$o['age_seconds'], $o['cancel_requested_at']);
@@ -351,7 +375,8 @@ function route($method, $action, $parts): void
             'SELECT o.id, o.name, o.phone, o.occasion, o.needed_on, o.address_text,
                     o.lat, o.lng, o.notes, o.status, o.total_estimate,
                     o.subtotal, o.cgst, o.sgst, o.gst_rate,
-                    o.discount_pct, o.discount_amount, o.delivery_charge, o.is_complimentary,
+                    o.discount_pct, o.discount_amount, o.discount_code, o.code_pct, o.code_amount,
+                    o.delivery_charge, o.is_complimentary,
                     o.cancel_requested_at,
                     o.cancel_requested_at,
                     o.created_at, b.name AS branch_name,
@@ -379,6 +404,8 @@ function route($method, $action, $parts): void
         $order['gst_rate'] = (float)$order['gst_rate'];
         $order['discount_pct']     = (float)$order['discount_pct'];
         $order['discount_amount']  = (float)$order['discount_amount'];
+        $order['code_pct']         = (float)$order['code_pct'];
+        $order['code_amount']      = (float)$order['code_amount'];
         $order['delivery_charge']  = (float)$order['delivery_charge'];
         $order['is_complimentary'] = (bool)$order['is_complimentary'];
         $order['cancel_seconds_left'] = cancel_seconds_left($order['status'], (int)$order['age_seconds'], $order['cancel_requested_at']);
