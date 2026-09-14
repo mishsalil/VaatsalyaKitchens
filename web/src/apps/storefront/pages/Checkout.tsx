@@ -21,7 +21,8 @@ import { AddressPicker, type AddressPayload } from '../components/AddressPicker'
 import { BillDetails, type BillItem } from '../components/BillDetails';
 import { CartLines } from '../components/CartLines';
 import { UpsellStrip } from '../components/UpsellStrip';
-import { computeGst } from '../../shared/lib/gst';
+import { OffersCard, type AppliedCode } from '../components/OffersCard';
+import { computeOrderTotal } from '../../shared/lib/gst';
 import { lineLabel, linePrice, variantsText } from '../../shared/types';
 import { PushNudge } from '../../shared/push/PushNudge';
 
@@ -56,6 +57,7 @@ export function Checkout() {
   const [phoneErr, setPhoneErr] = useState('');
   const [whenErr, setWhenErr] = useState('');
   const [formError, setFormError] = useState('');
+  const [applied, setApplied] = useState<AppliedCode | null>(null);
 
   // Prefill name/phone once auth resolves (initial useState ran while user was null).
   useEffect(() => {
@@ -101,7 +103,9 @@ export function Checkout() {
     price: linePrice(l),
   }));
   // Tax-exclusive preview — the server recomputes authoritatively on order create.
-  const gst = computeGst(total, settings?.gst_rate);
+  // An applied code's pct comes from the server's check, so this matches what
+  // create will store; GST is charged on the discounted subtotal.
+  const gst = computeOrderTotal(total, settings?.gst_rate, applied?.pct ?? 0);
   const grandTotal = gst.total;
 
   /* Minimum order. Checked against the pre-tax subtotal, which is what the
@@ -143,6 +147,7 @@ export function Checkout() {
         // needed_on stays free text for the slip and the phone call.
         needed_at: whenLocal.replace('T', ' ') + ':00',
         notes: notes.trim(),
+        discount_code: applied?.code,
         items: lines.map((l) => ({
           id: l.id,
           qty: l.qty,
@@ -164,8 +169,12 @@ export function Checkout() {
       await refresh(); // guest → logged in
       navigate(`/order-success/${order_id}`);
     } catch (err) {
-      setFormError((err as Error).message);
-      toast.error((err as Error).message);
+      const msg = (err as Error).message;
+      // The server re-checks the code on create; a refusal that names it (or
+      // "code") means it stopped qualifying — drop it so the bill is honest.
+      if (applied && (msg.includes(applied.code) || /\bcode\b/i.test(msg))) setApplied(null);
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }
@@ -263,10 +272,13 @@ export function Checkout() {
 
         {/* Right: upsell + bill + place order (sticky on desktop) */}
         <aside className="md:sticky md:top-20 space-y-4">
+          {/* Rendered once: on a phone the aside follows the form, so this
+              already sits directly above the bill. */}
+          <OffersCard subtotal={total} phone={normalizePhone(phone) ?? ''} applied={applied} onApply={setApplied} onRemove={() => setApplied(null)} />
           <div className="hidden md:block">
             <UpsellStrip items={menu.data?.items ?? []} categories={menu.data?.categories ?? []} closedCategoryIds={closedIds} />
           </div>
-          <BillDetails items={billItems} total={grandTotal} gst={gst} />
+          <BillDetails items={billItems} total={grandTotal} gst={{ ...gst, discountCode: applied?.code ?? null }} />
           {belowMinimum && (
             <p className="rounded-xl border border-gold-300 bg-gold-50 px-4 py-3 text-sm text-brand-700">
               Our minimum order is <strong>{rupees(minOrder)}</strong>. Please add{' '}

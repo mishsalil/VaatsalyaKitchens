@@ -73,6 +73,7 @@ export function OrderSuccess() {
           rate: order.gst_rate,
           discountPct: order.discount_pct,
           discountAmount: order.discount_amount,
+          discountCode: order.discount_code,
           deliveryCharge: order.delivery_charge,
           complimentary: order.is_complimentary,
         }

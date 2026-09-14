@@ -19,6 +19,8 @@ export interface BillGst {
      present when the customer views an order a rep entered at the till. */
   discountPct?: number;
   discountAmount?: number;
+  /** A discount code, when the discount came from one — shown as the row label. */
+  discountCode?: string | null;
   deliveryCharge?: number;
   complimentary?: boolean;
 }
@@ -61,7 +63,7 @@ export function BillDetails({ items, total, gst }: { items: BillItem[]; total: n
           </div>
           {discount > 0 && (
             <div className="flex items-center justify-between">
-              <span>Discount ({(gst!.discountPct ?? 0).toLocaleString('en-IN')}%)</span>
+              <span>{gst!.discountCode || 'Discount'} ({(gst!.discountPct ?? 0).toLocaleString('en-IN')}%)</span>
               <span className="text-brand-900">− {rupees(discount)}</span>
             </div>
           )}
