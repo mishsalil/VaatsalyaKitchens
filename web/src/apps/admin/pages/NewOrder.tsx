@@ -4,8 +4,9 @@ import { Search, Minus, X, Check, Printer, UserCheck, Gift, MessageCircle, Clock
 import { useAdminAuth } from '../context/AdminAuthContext';
 import { useFetch } from '../../shared/hooks/useFetch';
 import { adminOrdersApi, type AdminNewOrderLine } from '../api/endpoints';
-import { menuApi } from '../../shared/api/endpoints';
+import { discountsApi, menuApi } from '../../shared/api/endpoints';
 import { computeOrderTotal } from '../../shared/lib/gst';
+import { codeAmount, discountMeter } from '../../shared/lib/discounts';
 import { defaultNeededOnLocal, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
 import { cartKey, groupVariants, variantsText, type MenuItem } from '../../shared/types';
 import { kitchenOpenAt, categoryOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
@@ -94,6 +95,16 @@ export function AdminNewOrder() {
   const [discountPct, setDiscountPct] = useState('');
   const [deliveryCharge, setDeliveryCharge] = useState('');
   const [complimentary, setComplimentary] = useState(false);
+  /* Discount code. The server decides what a code is worth; `applied.pct` is
+     the effective (capped) percentage it came back with. */
+  const [codeText, setCodeText] = useState('');
+  const [applied, setApplied] = useState<{ code: string; pct: number; amount: number } | null>(null);
+  const [codeErr, setCodeErr] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
+  // Generation counter, as in the storefront's OffersCard: any apply / remove /
+  // re-check bumps it, so a late /check response never resurrects a code the
+  // rep has already removed or swapped.
+  const codeGen = useRef(0);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -228,9 +239,23 @@ export function AdminNewOrder() {
         setMapsPaste('');
         setMapsMsg(order.lat != null && order.lng != null ? 'Pin already on this order' : null);
         setNotes(order.notes ?? '');
-        setDiscountPct(order.discount_pct ? String(order.discount_pct) : '');
+        // The stored discount_pct is manual + code; split the code's share
+        // back out so the manual box shows only what the rep typed.
+        const manualPct = order.discount_code
+          ? Math.round((order.discount_pct - order.code_pct) * 100) / 100
+          : order.discount_pct;
+        setDiscountPct(manualPct ? String(manualPct) : '');
         setDeliveryCharge(order.delivery_charge ? String(order.delivery_charge) : '');
         setComplimentary(order.is_complimentary);
+        codeGen.current++;
+        setCodeErr('');
+        if (order.discount_code) {
+          setCodeText(order.discount_code);
+          setApplied({ code: order.discount_code, pct: order.code_pct, amount: order.code_amount });
+        } else {
+          setCodeText('');
+          setApplied(null);
+        }
 
         const next: Record<string, CartEntry> = {};
         let unresolved = 0;
@@ -414,13 +439,56 @@ export function AdminNewOrder() {
 
   const lines = Object.entries(cart).map(([key, entry]) => ({ key, entry, price: entryPrice(entry) }));
   const subtotal = lines.reduce((sum, l) => sum + l.price * l.entry.qty, 0);
+  const meter = discountMeter(applied?.pct ?? 0, Number(discountPct) || 0);
   const bill = computeOrderTotal(
     subtotal,
     settings?.gst_rate,
-    Number(discountPct) || 0,
+    meter.total,
     Number(deliveryCharge) || 0,
     complimentary,
   );
+  // `applied.pct` is already the effective pct (the server caps by max_amount
+  // before returning it), so the code's share is a straight percentage.
+  const appliedAmount = applied ? codeAmount(subtotal, applied.pct, Infinity) : 0;
+  const manualAmount = Math.round((bill.discountAmount - appliedAmount) * 100) / 100;
+
+  const applyCode = async (c: string) => {
+    codeGen.current++;
+    setCodeBusy(true); setCodeErr('');
+    try {
+      setApplied(await discountsApi.check({ code: c, subtotal, phone: normalizePhone(phone) ?? '' }));
+    } catch (e) {
+      setCodeErr((e as Error).message);
+    } finally {
+      setCodeBusy(false);
+    }
+  };
+
+  const removeCode = () => { codeGen.current++; setApplied(null); setCodeText(''); setCodeErr(''); };
+
+  // Re-check an applied code whenever the bill or phone changes; drop it with
+  // the server's reason when it no longer qualifies. Not while editing: the
+  // public /check can't exclude the order's own row, so a first-order code
+  // would fail against itself — admin/orders/update re-validates with that
+  // exclusion and refuses with its own message if the code no longer fits.
+  useEffect(() => {
+    if (!applied || editId !== null) return;
+    const g = ++codeGen.current;
+    discountsApi.check({ code: applied.code, subtotal, phone: normalizePhone(phone) ?? '' })
+      .then((r) => { if (g === codeGen.current) setApplied(r); })
+      .catch((e) => {
+        if (g !== codeGen.current) return;
+        setApplied(null);
+        setCodeErr(`${applied.code} removed: ${(e as Error).message}`);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtotal, phone]);
+
+  // A complimentary order collects nothing, so a code has nothing to take off.
+  useEffect(() => {
+    if (complimentary) removeCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [complimentary]);
 
   const reset = () => {
     // Recomputed, not blanked — the next order gets a fresh 40-minutes-from-now,
@@ -429,6 +497,7 @@ export function AdminNewOrder() {
     setCoords(null); setMapsPaste(''); setMapsMsg(null);
     setKnown(null); setCart({}); setQuery('');
     setDiscountPct(''); setDeliveryCharge(''); setComplimentary(false);
+    removeCode();
     setError(null); setPlaced(null); setClaimNote(null);
     // Otherwise a failed print from the order just finished would render under
     // the next order's confirmation screen, misattributed to it.
@@ -528,6 +597,7 @@ export function AdminNewOrder() {
       discount_pct: Number(discountPct) || 0,
       delivery_charge: Number(deliveryCharge) || 0,
       is_complimentary: complimentary,
+      ...(applied ? { discount_code: applied.code } : {}),
     };
 
     setSaving(true);
@@ -824,7 +894,7 @@ export function AdminNewOrder() {
             )}
 
             {/* Billing adjustments */}
-            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-cream-200 pt-3">
+            <div className="mt-3 grid grid-cols-3 gap-2 border-t border-cream-200 pt-3">
               <label className="block">
                 <span className="text-xs font-semibold text-brand-600">Discount %</span>
                 <input
@@ -847,7 +917,40 @@ export function AdminNewOrder() {
                   className={`mt-1 ${inputClass} disabled:bg-cream-100 disabled:text-brand-400`}
                 />
               </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-brand-600">Code</span>
+                <div className="mt-1 flex gap-1">
+                  <input
+                    value={codeText}
+                    onChange={(e) => { setCodeText(e.target.value.toUpperCase()); setCodeErr(''); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && codeText.trim() && !applied) { e.preventDefault(); applyCode(codeText.trim()); } }}
+                    placeholder="—"
+                    disabled={complimentary || !!applied}
+                    className={`${inputClass} min-w-0 font-mono uppercase disabled:bg-cream-100 disabled:text-brand-400`}
+                  />
+                  {applied ? (
+                    <button type="button" onClick={removeCode} aria-label="Remove code"
+                      className="shrink-0 rounded-xl border border-cream-300 px-2 text-brand-500 hover:bg-cream-50">
+                      <X className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => applyCode(codeText.trim())}
+                      disabled={complimentary || codeBusy || !codeText.trim()}
+                      className="shrink-0 rounded-xl border border-cream-300 px-2 text-sm font-semibold text-brand-700 hover:bg-cream-50 disabled:text-brand-300">
+                      Apply
+                    </button>
+                  )}
+                </div>
+              </label>
             </div>
+            {codeErr && <p className="mt-1 text-xs text-red-600">{codeErr}</p>}
+            {/* The ceiling only applies when a code is in play (the server enforces
+                it the same way), so the meter appears with the code. */}
+            {applied && (
+              <p className={`mt-1 text-xs ${meter.tone === 'over' ? 'font-semibold text-red-600' : meter.tone === 'warn' ? 'text-gold-800' : 'text-brand-500'}`}>
+                {meter.text}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => setComplimentary((v) => !v)}
@@ -863,8 +966,11 @@ export function AdminNewOrder() {
 
             <dl className="mt-3 space-y-1 border-t border-cream-200 pt-3 text-sm">
               <Row label="Subtotal" value={rupees(bill.subtotal)} />
-              {bill.discountAmount > 0 && (
-                <Row label={`Discount (${bill.discountPct}%)`} value={`− ${rupees(bill.discountAmount)}`} />
+              {manualAmount > 0 && (
+                <Row label={`Discount (${Number(discountPct) || 0}%)`} value={`− ${rupees(manualAmount)}`} />
+              )}
+              {applied && appliedAmount > 0 && (
+                <Row label={`${applied.code} (${applied.pct}%)`} value={`− ${rupees(appliedAmount)}`} />
               )}
               {!bill.complimentary && bill.rate > 0 && (
                 <>
@@ -888,7 +994,7 @@ export function AdminNewOrder() {
             )}
             {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
-            <Button onClick={save} disabled={saving} fullWidth className="mt-4">
+            <Button onClick={save} disabled={saving || (!!applied && meter.tone === 'over')} fullWidth className="mt-4">
               {saving ? 'Saving…' : 'Save order'}
             </Button>
           </div>
