@@ -38,6 +38,8 @@ function route($method, $action, $parts): void
     }
 
     if ($action === 'update') {
+        // discount_budget_pct is not read here — it lives on the Discounts screen
+        // (api/routes/admin/discounts.php), not Settings.
         $name     = mb_substr(trim((string)($_POST['kitchen_name'] ?? '')), 0, 120) ?: 'Vaatsalya Kitchens';
         $address  = mb_substr(trim((string)($_POST['kitchen_address'] ?? '')), 0, 500);
         $whatsapp = normalize_setting_phone($_POST['kitchen_whatsapp'] ?? '');
