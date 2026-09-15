@@ -26,15 +26,16 @@ class DiscountError extends RuntimeException {}
 /**
  * The five codes for budget B (percent, clamped to 0–50) and average order A
  * (rupees). C = round(B % of A to ₹10) is the everyday cap; the others are
- * multiples of it. Floors snap to ₹50. Budget 0 → no codes.
+ * multiples of it. Floors snap to ₹50. Budget 0, or one too small for a
+ * ₹10 cap → no codes: a plan of ₹0 codes is not a plan.
  */
 function discount_plan(float $budgetPct, float $avgOrder): array
 {
     $b = min(max($budgetPct, 0.0), DISCOUNT_BUDGET_MAX);
-    if ($b <= 0) {
+    $c = $b > 0 ? (float)(round($b / 100 * $avgOrder / 10) * 10) : 0.0;
+    if ($c <= 0) {
         return [];
     }
-    $c = (float)(round($b / 100 * $avgOrder / 10) * 10);
     $snap = fn(float $rupees) => (float)(round($rupees / 50) * 50);
     $row = fn(string $code, string $kind, float $pct, float $cap, float $min, bool $first = false, int $lapsed = 0) =>
         compact('code', 'kind', 'pct') + ['max_amount' => $cap, 'min_order' => $min, 'first_order_only' => $first, 'lapsed_days' => $lapsed];
@@ -85,10 +86,16 @@ function discount_month_stats(PDO $pdo): array
     return ['sales' => $sales, 'given' => $given, 'pct' => $sales > 0 ? round($given / $sales * 100, 2) : 0.0];
 }
 
-/** Auto-pause on AND this month's given/sales is over the budget. Computed at read time; nothing is written. */
-function discount_paused(PDO $pdo, ?float $budgetPct = null): bool
+/**
+ * Auto-pause on AND this month's given/sales is over the budget. Computed at
+ * read time; nothing is written. Both inputs default to the settings; a
+ * caller that has just written a setting passes the new value explicitly
+ * (all_settings() caches for the request).
+ */
+function discount_paused(PDO $pdo, ?float $budgetPct = null, ?bool $autoPause = null): bool
 {
-    if (setting('discount_auto_pause', '0') !== '1') {
+    $autoPause ??= setting('discount_auto_pause', '0') === '1';
+    if (!$autoPause) {
         return false;
     }
     $budgetPct ??= (float)setting('discount_budget_pct', '0');
@@ -96,12 +103,12 @@ function discount_paused(PDO $pdo, ?float $budgetPct = null): bool
 }
 
 /** Active codes in kind order, each flagged 'paused' (never the first-order code). */
-function discount_active(PDO $pdo): array
+function discount_active(PDO $pdo, ?float $budgetPct = null, ?bool $autoPause = null): array
 {
     $rows = $pdo->query(
         "SELECT * FROM discount_codes WHERE active = 1 ORDER BY FIELD(kind, 'first', 'comeback', 'everyday', 'flat', 'big'), id"
     )->fetchAll();
-    $paused = discount_paused($pdo);
+    $paused = discount_paused($pdo, $budgetPct, $autoPause);
     return array_map(function (array $r) use ($paused) {
         $row = discount_row($r);
         $row['paused'] = $paused && $row['kind'] !== 'first';
@@ -191,8 +198,12 @@ function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone,
         if ($phone === null || $phone === '') {
             throw new DiscountError("Enter your phone number to use {$row['code']}.");
         }
-        $sql = "SELECT COUNT(*) AS n, MAX(created_at) AS last FROM orders WHERE phone = ? AND status <> 'cancelled'";
-        $args = [$phone];
+        // The lapsed comparison stays inside SQL: PHP and MySQL do not share
+        // a clock on the production host, so created_at is only ever measured
+        // against NOW() from the same connection.
+        $sql = "SELECT COUNT(*) AS n, COALESCE(MAX(created_at) > NOW() - INTERVAL ? DAY, 0) AS recent
+                  FROM orders WHERE phone = ? AND status <> 'cancelled'";
+        $args = [$row['lapsed_days'], $phone];
         if ($excludeOrderId !== null) {
             $sql .= ' AND id <> ?';
             $args[] = $excludeOrderId;
@@ -207,7 +218,7 @@ function discount_check(PDO $pdo, string $code, float $subtotal, ?string $phone,
             if ((int)$r['n'] === 0) {
                 throw new DiscountError("{$row['code']} is for returning customers — try WELCOME on your first order.");
             }
-            if (new DateTimeImmutable($r['last']) > new DateTimeImmutable("-{$row['lapsed_days']} days")) {
+            if ((int)$r['recent']) {
                 throw new DiscountError("{$row['code']} is for customers we haven't seen in a while.");
             }
         }

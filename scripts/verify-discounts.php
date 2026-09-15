@@ -21,6 +21,7 @@ function refused(callable $fn): ?string {
 
 echo "discount_plan\n";
 check('budget 0 → no codes', [], discount_plan(0, 400));
+check('a budget too small for a ₹10 cap → no codes', [], discount_plan(1, 400));
 $p = discount_plan(24, 400);            // C = round(0.24*400/10)*10 = 100
 check('five codes', ['WELCOME','COMEBACK','VK10','VK20','FEAST'], array_column($p, 'code'));
 check('kinds', ['first','comeback','everyday','flat','big'], array_column($p, 'kind'));
@@ -162,6 +163,10 @@ try {
     check('not paused: 15 % given against a 24 % budget', false, discount_paused($pdo, 24));
     check('budget 0 never pauses', false, discount_paused($pdo, 0));
     check('setting budget 10 → paused', true, discount_paused($pdo));
+    check('explicit auto-pause off wins over the setting', false, discount_paused($pdo, 10, false));
+    check('explicit auto-pause on, explicit budget', true, discount_paused($pdo, 10, true));
+    check('discount_active passes both through', [false, false, false, false, false], array_column(discount_active($pdo, 10, false), 'paused'));
+    check('discount_active with explicit budget 24 → nothing paused', [false, false, false, false, false], array_column(discount_active($pdo, 24), 'paused'));
     $active = discount_active($pdo);
     check('all but WELCOME paused', [false, true, true, true, true], array_column($active, 'paused'));
     check('VK10 paused', 'VK10 is taking a break this month.', refused(fn() => discount_check($pdo, 'VK10', 1000, null)));
