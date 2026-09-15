@@ -462,16 +462,19 @@ CREATE TABLE IF NOT EXISTS menu_item_addons (
 CREATE TABLE IF NOT EXISTS discount_codes (
   id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
   code             VARCHAR(20)  NOT NULL,
-  kind             ENUM('first','flat','big') NOT NULL,
+  kind             ENUM('first','comeback','everyday','flat','big') NOT NULL,
   pct              DECIMAL(5,2) NOT NULL,
   max_amount       DECIMAL(10,2) NOT NULL,
   min_order        DECIMAL(10,2) NOT NULL DEFAULT 0,
   first_order_only TINYINT(1)   NOT NULL DEFAULT 0,
+  lapsed_days      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
   active           TINYINT(1)   NOT NULL DEFAULT 1,
   created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_discount_code (code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT IGNORE INTO settings (`key`, `value`) VALUES ('discount_auto_pause', '0');
 
 SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE order_items ADD COLUMN variant_name VARCHAR(80) NULL AFTER item_name')
   FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='order_items' AND COLUMN_NAME='variant_name');

@@ -56,6 +56,7 @@ function settings_defaults(): array
            away. includes/discounts.php turns it into codes; "0" = no codes.
            Owned by api/routes/admin/discounts.php, not the Settings page. */
         'discount_budget_pct'  => '0',
+        'discount_auto_pause'  => '0',
     ];
 }
 

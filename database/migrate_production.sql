@@ -515,6 +515,14 @@ SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE orders ADD COLUMN code_a
 PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
 
 
+-- --- migration_017: discount personas ---------------------------------------
+ALTER TABLE discount_codes MODIFY COLUMN kind ENUM('first','comeback','everyday','flat','big') NOT NULL;
+SET @s := (SELECT IF(COUNT(*) > 0, 'DO 0', 'ALTER TABLE discount_codes ADD COLUMN lapsed_days SMALLINT UNSIGNED NOT NULL DEFAULT 0 AFTER first_order_only')
+  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME='discount_codes' AND COLUMN_NAME='lapsed_days');
+PREPARE st FROM @s; EXECUTE st; DEALLOCATE PREPARE st;
+INSERT IGNORE INTO settings (`key`, value) VALUES ('discount_auto_pause', '0');
+
+
 -- ============================================================================
 -- VERIFICATION — every row must read OK.
 -- ============================================================================
@@ -562,4 +570,6 @@ UNION ALL SELECT 'order_items.variant_ids', IF(COUNT(*)=1,'OK','MISSING') FROM i
 UNION ALL SELECT 'discount_codes', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='discount_codes'
 UNION ALL SELECT 'orders.discount_code', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='discount_code'
 UNION ALL SELECT 'orders.code_pct', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='code_pct'
-UNION ALL SELECT 'orders.code_amount', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='code_amount';
+UNION ALL SELECT 'orders.code_amount', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='orders' AND COLUMN_NAME='code_amount'
+UNION ALL SELECT 'discount_codes.lapsed_days', IF(COUNT(*)=1,'OK','MISSING') FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='discount_codes' AND COLUMN_NAME='lapsed_days'
+UNION ALL SELECT 'settings discount_auto_pause', IF(COUNT(*)=1,'OK','MISSING') FROM settings WHERE `key`='discount_auto_pause';
