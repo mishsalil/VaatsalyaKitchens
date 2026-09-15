@@ -129,7 +129,7 @@ export function Order() {
       ) : q ? (
         /* Search results — flat, no category grouping. The cart panel stays
            beside them so it does not vanish while searching. */
-        <div className="mt-4 lg:grid lg:grid-cols-[1fr_20rem] lg:gap-8">
+        <div className="mt-4 lg:grid lg:grid-cols-[1fr_22rem] lg:gap-8">
           <div className="min-w-0 space-y-3">
             <p className="px-1 text-sm text-brand-500">
               {matches.length === 0
@@ -149,7 +149,7 @@ export function Order() {
       ) : (
         /* Browse — rail, menu and the open cart side by side from lg up,
            stacked (rail only) below. */
-        <div className="mt-2 lg:grid lg:grid-cols-[13rem_1fr_20rem] lg:gap-8">
+        <div className="mt-2 lg:grid lg:grid-cols-[14rem_1fr_22rem] lg:gap-8">
           <CategoryRail categories={visibleCats} />
           <div className="min-w-0 space-y-2">
             {visibleCats.map((cat) => {

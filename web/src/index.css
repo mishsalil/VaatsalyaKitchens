@@ -26,7 +26,7 @@
     @apply mx-auto w-full max-w-3xl px-4 sm:px-6;
   }
   .container-wide {
-    @apply mx-auto w-full max-w-5xl px-4 sm:px-6;
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6;
   }
   .card-soft {
     @apply rounded-2xl border border-cream-200 bg-white shadow-card;

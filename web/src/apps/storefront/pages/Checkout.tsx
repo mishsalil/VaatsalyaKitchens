@@ -227,7 +227,7 @@ export function Checkout() {
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 md:grid-cols-[1fr_24rem] md:items-start">
+      <div className="mt-6 grid gap-6 items-start lg:grid-cols-[1fr_26rem]">
         {/* Left: details form. min-w-0 matters: a 1fr grid column defaults to
             min-width:auto, so the map picker's autocomplete element — a web
             component with an intrinsic width — stretched the column and put a
@@ -247,67 +247,73 @@ export function Checkout() {
 
           {/* On a phone the upsell sits between the cart and the rest of the
               form; on desktop it lives in the right column above the bill. */}
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <UpsellStrip items={menu.data?.items ?? []} categories={menu.data?.categories ?? []} closedCategoryIds={closedIds} />
           </div>
 
-          {/* Delivery */}
-          <section id="address-field" className="card-soft p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Delivery</h2>
-            {addressErr && <FieldError message={addressErr} />}
-            <div className="mt-4">
-              <Field label={<>Delivery address</>} hint="(leave on pickup for pickup)">
-                <AddressPicker addresses={addresses.data?.addresses ?? []} value={address} onChange={(a) => { setAddress(a); setAddressErr(''); }} />
-              </Field>
-            </div>
-          </section>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="space-y-6">
+              {/* When */}
+              <section id="when-field" className="card-soft p-6">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">When</h2>
+                <div className="mt-4 space-y-4">
+                  <Field label="Which day?">
+                    <DatePicker hours={hours} value={date} onChange={pickDate} />
+                  </Field>
+                  <Field label="What time?" error={whenErr}>
+                    <TimePicker hours={hours} date={date} value={time} onChange={(t) => { setTime(t); setWhenErr(''); }} />
+                  </Field>
+                </div>
+              </section>
 
-          {/* When */}
-          <section id="when-field" className="card-soft p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">When</h2>
-            <div className="mt-4 space-y-4">
-              <Field label="Which day?">
-                <DatePicker hours={hours} value={date} onChange={pickDate} />
-              </Field>
-              <Field label="What time?" error={whenErr}>
-                <TimePicker hours={hours} date={date} value={time} onChange={(t) => { setTime(t); setWhenErr(''); }} />
-              </Field>
+              {/* Delivery */}
+              <section id="address-field" className="card-soft p-6">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Delivery</h2>
+                {addressErr && <FieldError message={addressErr} />}
+                <div className="mt-4">
+                  <Field label={<>Delivery address</>} hint="(leave on pickup for pickup)">
+                    <AddressPicker addresses={addresses.data?.addresses ?? []} value={address} onChange={(a) => { setAddress(a); setAddressErr(''); }} />
+                  </Field>
+                </div>
+              </section>
             </div>
-          </section>
 
-          {/* Contact */}
-          <section className="card-soft p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Contact</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Your name" htmlFor="cust-name" error={nameErr}>
-                <Input id="cust-name" value={name} invalid={!!nameErr} onChange={(e) => { setName(e.target.value); setNameErr(''); }} placeholder="e.g. Sunita Sharma" autoComplete="name" required />
-              </Field>
-              <Field label="Phone number" htmlFor="cust-phone" error={phoneErr}>
-                <Input id="cust-phone" type="tel" inputMode="numeric" value={phone} invalid={!!phoneErr} onChange={(e) => { setPhone(e.target.value); setPhoneErr(''); }} placeholder="e.g. 98765 43210" autoComplete="tel" required />
-              </Field>
-            </div>
-          </section>
+            <div className="space-y-6">
+              {/* Contact */}
+              <section className="card-soft p-6">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Contact</h2>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <Field label="Your name" htmlFor="cust-name" error={nameErr}>
+                    <Input id="cust-name" value={name} invalid={!!nameErr} onChange={(e) => { setName(e.target.value); setNameErr(''); }} placeholder="e.g. Sunita Sharma" autoComplete="name" required />
+                  </Field>
+                  <Field label="Phone number" htmlFor="cust-phone" error={phoneErr}>
+                    <Input id="cust-phone" type="tel" inputMode="numeric" value={phone} invalid={!!phoneErr} onChange={(e) => { setPhone(e.target.value); setPhoneErr(''); }} placeholder="e.g. 98765 43210" autoComplete="tel" required />
+                  </Field>
+                </div>
+              </section>
 
-          {/* Anything else */}
-          <section className="card-soft p-6">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Anything else</h2>
-            <div className="mt-4 space-y-4">
-              <Field label={<>What is the occasion?</>} hint="(optional)">
-                <OccasionSelect value={occasion} onChange={setOccasion} />
-              </Field>
-              <Field label={<>Anything else we should know?</>} hint="(less spicy, no onion-garlic, etc.)">
-                <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </Field>
+              {/* Anything else */}
+              <section className="card-soft p-6">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Anything else</h2>
+                <div className="mt-4 space-y-4">
+                  <Field label={<>What is the occasion?</>} hint="(optional)">
+                    <OccasionSelect value={occasion} onChange={setOccasion} />
+                  </Field>
+                  <Field label={<>Anything else we should know?</>} hint="(less spicy, no onion-garlic, etc.)">
+                    <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  </Field>
+                </div>
+              </section>
             </div>
-          </section>
+          </div>
         </form>
 
         {/* Right: upsell + bill + place order (sticky on desktop) */}
-        <aside className="md:sticky md:top-20 space-y-4">
+        <aside className="lg:sticky lg:top-20 space-y-4">
           {/* Rendered once: on a phone the aside follows the form, so this
               already sits directly above the bill. */}
           <OffersCard subtotal={total} phone={normalizePhone(phone) ?? ''} applied={applied} error={codeErr} onApply={(a) => { setApplied(a); setCodeErr(''); }} onRemove={() => setApplied(null)} onErrorClear={() => setCodeErr('')} />
-          <div className="hidden md:block">
+          <div className="hidden lg:block">
             <UpsellStrip items={menu.data?.items ?? []} categories={menu.data?.categories ?? []} closedCategoryIds={closedIds} />
           </div>
           <BillDetails items={billItems} total={grandTotal} gst={{ ...gst, discountCode: applied?.code ?? null }} />

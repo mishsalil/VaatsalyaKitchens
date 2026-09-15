@@ -41,7 +41,7 @@ export function MyAccount() {
   const addrCount = addresses.data?.addresses.length ?? 0;
 
   return (
-    <div className="container-page py-6">
+    <div className="container-wide py-6">
       <PendingReviewCard />
 
       {/* Profile header */}
