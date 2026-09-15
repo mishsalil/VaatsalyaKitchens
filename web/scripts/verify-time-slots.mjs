@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const src = readFileSync(new URL('../src/apps/shared/lib/timeSlots.ts', import.meta.url), 'utf8');
 const { code } = await transform(src, { loader: 'ts', format: 'esm' });
-const { dayOptions, slotsFor, firstAvailable } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+const { dayOptions, slotsFor, firstAvailable, asapAt, monthCells, slotGroups, describeSlot } = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
 
 let pass = 0, fail = 0;
 const check = (what, expected, actual) => {
@@ -41,6 +41,36 @@ check('unconfigured hours: 08:00–22:00', ['08:00', '22:00'], (() => { const s 
 console.log('\nfirstAvailable');
 check('today when it has a slot', { date: '2026-09-12', time: '11:00' }, firstAvailable(hours, at(10)));
 check('skips a closed Sunday to Monday', { date: '2026-09-14', time: '11:00' }, firstAvailable(hours, at(21, 45)));
+// Open only Saturdays; "now" is Saturday but past closing, so the next 7 days (the old
+// dayOptions default) are all closed and the search must reach into the 8th day.
+const satOnly = { ...hours, kitchen: [win(6, '08:00:00', '22:00:00')] };
+check('searches past 7 days to find the next open Saturday', { date: '2026-09-19', time: '08:00' }, firstAvailable(satOnly, at(23, 50)));
+
+console.log('\nasapAt');
+const hm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+check('12:41 snaps up to 13:25', '13:25', hm(asapAt(at(12, 41))));
+check('12:20 (already on grid) stays 13:00', '13:00', hm(asapAt(at(12, 20))));
+
+console.log('\nmonthCells');
+const sep = monthCells('2026-09', hours, at(10));
+check('42 cells', 42, sep.length);
+check('2 leading blanks (Sep 2026 starts Tuesday)', [null, null], sep.slice(0, 2));
+check('first real cell is the 1st', 1, sep[2].day);
+check('Sundays disabled', true, sep.filter((c) => c && new Date(2026, 8, c.day).getDay() === 0).every((c) => c.disabled));
+check('yesterday (2026-09-11) disabled', true, sep.find((c) => c && c.date === '2026-09-11').disabled);
+check('today (2026-09-12) flagged', true, sep.find((c) => c && c.date === '2026-09-12').today);
+const farOut = monthCells('2027-10', hours, at(10));
+check('a month 13+ months out is entirely disabled', true, farOut.filter(Boolean).every((c) => c.disabled));
+
+console.log('\nslotGroups');
+check('buckets by time of day, empty groups omitted', [
+  { label: 'Morning', slots: ['09:00'] },
+  { label: 'Afternoon', slots: ['12:00', '16:30'] },
+  { label: 'Evening', slots: ['17:00'] },
+], slotGroups(['09:00', '12:00', '16:30', '17:00']));
+
+console.log('\ndescribeSlot');
+check('formats weekday, day, month, 12-hour time', 'Sat 19 Sep, 7:30 PM', describeSlot('2026-09-19', '19:30'));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
