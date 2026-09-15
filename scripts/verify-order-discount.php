@@ -22,28 +22,33 @@ $pdo->exec("DROP DATABASE IF EXISTS `$dbName`");
 $pdo->exec("CREATE DATABASE `$dbName` DEFAULT CHARSET=utf8mb4");
 $pdo->exec("USE `$dbName`");
 $pdo->exec("CREATE TABLE discount_codes (
-  id INT UNSIGNED NOT NULL AUTO_INCREMENT, code VARCHAR(20) NOT NULL, kind ENUM('first','flat','big') NOT NULL,
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT, code VARCHAR(20) NOT NULL, kind ENUM('first','comeback','everyday','flat','big') NOT NULL,
   pct DECIMAL(5,2) NOT NULL, max_amount DECIMAL(10,2) NOT NULL, min_order DECIMAL(10,2) NOT NULL DEFAULT 0,
-  first_order_only TINYINT(1) NOT NULL DEFAULT 0, active TINYINT(1) NOT NULL DEFAULT 1,
+  first_order_only TINYINT(1) NOT NULL DEFAULT 0, lapsed_days SMALLINT UNSIGNED NOT NULL DEFAULT 0, active TINYINT(1) NOT NULL DEFAULT 1,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uq_discount_code (code))");
 $pdo->exec("CREATE TABLE orders (id INT UNSIGNED NOT NULL AUTO_INCREMENT, phone VARCHAR(20) NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'new', subtotal DECIMAL(10,2) NOT NULL DEFAULT 0, discount_code VARCHAR(20) NULL,
+  code_amount DECIMAL(10,2) NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id))");
+$pdo->exec("CREATE TABLE settings (`key` VARCHAR(190) NOT NULL, `value` TEXT NULL, PRIMARY KEY (`key`))");
 
 try {
-    // Budget 10, no delivered orders → average ₹400: WELCOME 15 % cap 100,
-    // VK10 10 % min 400 cap 150, FEAST 15 % min 800 cap 300.
-    $codes = discount_regenerate($pdo, 10);
-    check('seeded', ['WELCOME', 'VK10', 'FEAST'], array_column($codes, 'code'));
+    // Budget 24, no delivered orders → average ₹400, C = ₹100: WELCOME 50 % cap 150,
+    // COMEBACK 30 % cap 150, VK10 10 % cap 100, VK20 20 % min 400 cap 150,
+    // FEAST 30 % min 800 cap 300.
+    $codes = discount_regenerate($pdo, 24);
+    check('seeded', ['WELCOME', 'COMEBACK', 'VK10', 'VK20', 'FEAST'], array_column($codes, 'code'));
 
     echo "\ncode amount == bill discount_amount\n";
-    $freshPhone = '919000000009';
+    $freshPhone  = '919000000009';
+    $lapsedPhone = '919000000008';   // one order, 60 days ago: what COMEBACK wants
+    $pdo->exec("INSERT INTO orders (phone, status, subtotal, created_at) VALUES ('$lapsedPhone', 'delivered', 500, NOW() - INTERVAL 60 DAY)");
     foreach ([200, 667, 999.99, 1234.56, 2000, 7968.15] as $subtotal) {
         foreach ($codes as $c) {
             if ($subtotal < $c['min_order']) {
                 continue;
             }
-            $r = discount_check($pdo, $c['code'], $subtotal, $freshPhone);
+            $r = discount_check($pdo, $c['code'], $subtotal, $c['kind'] === 'comeback' ? $lapsedPhone : $freshPhone);
             $bill = compute_order_total($subtotal, 5, $r['pct']);
             check(sprintf('%s on ₹%s → %s %% = ₹%s', $c['code'], $subtotal, $r['pct'], $r['amount']),
                 $r['amount'], $bill['discount_amount']);
@@ -55,6 +60,8 @@ try {
     echo "\ndiscount_combined_ok\n";
     check('12 + 12 ok', true,  discount_combined_ok(12, 12));
     check('12 + 13 no', false, discount_combined_ok(12, 13));
+    check('50 + 1 no',  false, discount_combined_ok(50, 1));
+    check('50 + 0 ok',  true,  discount_combined_ok(50, 0));
 
     echo "\nlegacy orders unaffected\n";
     $legacy = compute_gst(1000, 5);

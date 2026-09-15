@@ -10,7 +10,7 @@ require_once __DIR__ . '/../../../includes/settings.php';
    would still see the pre-write value. */
 function discounts_payload(PDO $pdo, ?float $budgetPct = null): array
 {
-    $rows = $pdo->query('SELECT * FROM discount_codes ORDER BY active DESC, FIELD(kind, \'first\', \'flat\', \'big\'), id')->fetchAll();
+    $rows = $pdo->query('SELECT * FROM discount_codes ORDER BY active DESC, FIELD(kind, \'first\', \'comeback\', \'everyday\', \'flat\', \'big\'), id')->fetchAll();
     $usage = $pdo->prepare(
         "SELECT COUNT(*) AS uses, COALESCE(SUM(code_amount), 0) AS given FROM orders WHERE discount_code = ? AND status <> 'cancelled'"
     );
