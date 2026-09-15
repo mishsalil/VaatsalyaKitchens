@@ -1,12 +1,26 @@
 <?php
 /* The discount engine and the bill agree: what discount_check() promises for a
    code is exactly what compute_order_total() takes off once the order stores
-   that code's 2-dp percentage. Throwaway database, no HTTP. */
+   that code's 2-dp percentage. Throwaway database, no HTTP. The counter's
+   counter_discount() is loaded from its route file with Response::error()
+   stubbed to throw, so a refusal is an assertable value. */
 
 chdir(__DIR__ . '/..');
 require 'includes/db.php';
 require 'includes/discounts.php';
 require 'includes/gst.php';
+
+class VerifyRefused extends RuntimeException {}
+if (!class_exists('Response')) {
+    class Response {
+        public static function error(string $msg, int $code = 422): void { throw new VerifyRefused($msg); }
+        public static function json($d, int $c = 200): void {}
+    }
+}
+require 'api/routes/admin/orders.php';
+function refused(callable $fn): ?string {
+    try { $fn(); return null; } catch (VerifyRefused $e) { return $e->getMessage(); }
+}
 
 $pass = 0; $fail = 0;
 function check(string $what, $expected, $actual): void {
@@ -62,6 +76,16 @@ try {
     check('12 + 13 no', false, discount_combined_ok(12, 13));
     check('50 + 1 no',  false, discount_combined_ok(50, 1));
     check('50 + 0 ok',  true,  discount_combined_ok(50, 0));
+
+    echo "\ncounter_discount\n";
+    // WELCOME on ₹200 is a full 50 % (cap 150 not reached).
+    [$pct, $row] = counter_discount($pdo, 200, $freshPhone, 0, false, 'WELCOME');
+    check('WELCOME alone on a fresh phone: combined pct is the code\'s effective pct', [50.0, 'WELCOME', 100.0], [$pct, $row['code'], $row['amount']]);
+    $msg = refused(fn() => counter_discount($pdo, 200, $freshPhone, 1, false, 'WELCOME'));
+    check('WELCOME + 1 % manual refused', true, str_starts_with((string)$msg, 'Discount (1 %) cannot be added on top of WELCOME'));
+    check('the refusal names the ceiling', 'Discount (1 %) cannot be added on top of WELCOME (50 %) — the ceiling is 24 %.', $msg);
+    check('no code: manual pct passes through', [12.0, null], counter_discount($pdo, 200, $freshPhone, 12, false, ''));
+    check('an invalid code is refused with the engine\'s sentence', "That code isn't valid.", refused(fn() => counter_discount($pdo, 200, $freshPhone, 0, false, 'NOPE')));
 
     echo "\nlegacy orders unaffected\n";
     $legacy = compute_gst(1000, 5);

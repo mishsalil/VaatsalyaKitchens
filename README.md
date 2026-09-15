@@ -81,7 +81,9 @@ until you do.
 Discount personas (five codes instead of three): run
 `database/migration_017_discount_personas.sql` (or the cumulative
 `database/migrate_production.sql`), then Regenerate on **Admin →
-Discounts** to replace the old three codes with the new five.
+Discounts** to replace the old three codes with the new five. After
+Regenerate, a legacy `VK<n>` row may have become the 20 % code under its
+old name; rename it on Admin → Discounts.
 
 ## Menu data from Zomato
 

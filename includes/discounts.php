@@ -120,7 +120,10 @@ function discount_active(PDO $pdo, ?float $budgetPct = null, ?bool $autoPause = 
  * Apply the plan for a budget: every active row not in the plan is switched
  * off, then each planned code is written onto an existing row (keeps its id
  * and any usage history) or inserted. Every code matches by KIND — the most
- * recent row of that kind keeps whatever name marketing gave it. Returns the
+ * recent row of that kind keeps whatever name marketing gave it. With no row
+ * of the kind, a row already carrying the planned TEXT is taken over instead
+ * of inserted (the old plan named its flat code VK<budget>, so a legacy VK10
+ * or VK20 may sit there under another kind, and code is unique). Returns the
  * active rows.
  */
 function discount_regenerate(PDO $pdo, float $budgetPct): array
@@ -131,8 +134,9 @@ function discount_regenerate(PDO $pdo, float $budgetPct): array
     try {
         $pdo->exec('UPDATE discount_codes SET active = 0');
         $byKind = $pdo->prepare('SELECT id FROM discount_codes WHERE kind = ? ORDER BY active DESC, id DESC LIMIT 1');
+        $byText = $pdo->prepare('SELECT id FROM discount_codes WHERE code = ?');
         $upd = $pdo->prepare(
-            'UPDATE discount_codes SET pct = ?, max_amount = ?, min_order = ?, first_order_only = ?, lapsed_days = ?, active = 1 WHERE id = ?'
+            'UPDATE discount_codes SET kind = ?, pct = ?, max_amount = ?, min_order = ?, first_order_only = ?, lapsed_days = ?, active = 1 WHERE id = ?'
         );
         $ins = $pdo->prepare(
             'INSERT INTO discount_codes (code, kind, pct, max_amount, min_order, first_order_only, lapsed_days, active) VALUES (?, ?, ?, ?, ?, ?, ?, 1)'
@@ -140,8 +144,12 @@ function discount_regenerate(PDO $pdo, float $budgetPct): array
         foreach ($plan as $p) {
             $byKind->execute([$p['kind']]);
             $id = $byKind->fetchColumn();
+            if ($id === false) {
+                $byText->execute([$p['code']]);
+                $id = $byText->fetchColumn();
+            }
             if ($id !== false) {
-                $upd->execute([$p['pct'], $p['max_amount'], $p['min_order'], $p['first_order_only'] ? 1 : 0, $p['lapsed_days'], (int)$id]);
+                $upd->execute([$p['kind'], $p['pct'], $p['max_amount'], $p['min_order'], $p['first_order_only'] ? 1 : 0, $p['lapsed_days'], (int)$id]);
             } else {
                 $ins->execute([$p['code'], $p['kind'], $p['pct'], $p['max_amount'], $p['min_order'], $p['first_order_only'] ? 1 : 0, $p['lapsed_days']]);
             }

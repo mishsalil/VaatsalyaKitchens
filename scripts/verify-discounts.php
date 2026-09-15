@@ -93,6 +93,28 @@ try {
     $active = discount_regenerate($pdo, 24);
     check('five active again, ids kept', 5, (int)$pdo->query('SELECT COUNT(*) FROM discount_codes')->fetchColumn());
 
+    echo "\ndiscount_regenerate on a legacy table\n";
+    // What the old three-code plan leaves behind: its flat code was named
+    // VK<budget>, so a VK10 row of kind 'flat' sits there, switched off but
+    // never deleted, with the text the new plan wants for its everyday code.
+    $pdo->exec('TRUNCATE discount_codes');
+    $pdo->exec("INSERT INTO discount_codes (code, kind, pct, max_amount, min_order, first_order_only, active) VALUES
+        ('WELCOME', 'first', 50, 150, 0, 1, 0), ('VK10', 'flat', 10, 100, 400, 0, 0),
+        ('VK12', 'flat', 12, 120, 400, 0, 1), ('FEAST', 'big', 30, 300, 800, 0, 1)");
+    $legacyVk10Id = (int)$pdo->query("SELECT id FROM discount_codes WHERE code = 'VK10'")->fetchColumn();
+    $legacyVk12Id = (int)$pdo->query("SELECT id FROM discount_codes WHERE code = 'VK12'")->fetchColumn();
+    $active = discount_regenerate($pdo, 24);
+    check('legacy: five active', ['WELCOME', 'COMEBACK', 'VK10', 'VK12', 'FEAST'], array_column($active, 'code'));
+    check('legacy: kinds in order', ['first', 'comeback', 'everyday', 'flat', 'big'], array_column($active, 'kind'));
+    check('legacy: VK10 reused by text as the everyday row', [$legacyVk10Id, 'everyday', 10.0, 100.0, 0.0],
+        [(int)$pdo->query("SELECT id FROM discount_codes WHERE code = 'VK10'")->fetchColumn(), $active[2]['kind'], $active[2]['pct'], $active[2]['max_amount'], $active[2]['min_order']]);
+    check('legacy: VK12 reused by kind as the flat 20 % row, keeping its text', [$legacyVk12Id, 20.0, 150.0, 400.0],
+        [$active[3]['id'], $active[3]['pct'], $active[3]['max_amount'], $active[3]['min_order']]);
+    check('legacy: no VK20 inserted', 0, (int)$pdo->query("SELECT COUNT(*) FROM discount_codes WHERE code = 'VK20'")->fetchColumn());
+    check('legacy: five rows in all', 5, (int)$pdo->query('SELECT COUNT(*) FROM discount_codes')->fetchColumn());
+    $pdo->exec('TRUNCATE discount_codes');   // back to the standard five for everything below
+    discount_regenerate($pdo, 24);
+
     echo "\ndiscount_check\n";
     // 919000000001 ordered 50 days ago, 919000000002 ten days ago, 919000000003 never.
     $pdo->exec("INSERT INTO orders (phone, status, subtotal, created_at) VALUES ('919000000001', 'delivered', 600, NOW() - INTERVAL 50 DAY)");
