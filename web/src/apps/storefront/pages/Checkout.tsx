@@ -9,7 +9,7 @@ import { useCart } from '../../shared/context/CartContext';
 import { useToast } from '../../shared/context/ToastContext';
 import { displayPhone, formatNeededOn, normalizePhone, rupees } from '../../shared/lib/format';
 import { Input, Textarea } from '../../shared/components/ui/Input';
-import { Field } from '../../shared/components/ui/Field';
+import { Field, FieldError } from '../../shared/components/ui/Field';
 import { Button } from '../../shared/components/ui/Button';
 import { FormError } from '../../shared/components/ui/FormError';
 import { OccasionSelect } from '../components/OccasionSelect';
@@ -25,6 +25,7 @@ import { OffersCard, type AppliedCode } from '../components/OffersCard';
 import { computeOrderTotal } from '../../shared/lib/gst';
 import { lineLabel, linePrice, variantsText } from '../../shared/types';
 import { PushNudge } from '../../shared/push/PushNudge';
+import { focusFirstError, checkoutFieldFor } from '../../shared/lib/focusError';
 
 /**
  * Step 2 of the guided order flow — a focused checkout. The cart is editable
@@ -56,8 +57,22 @@ export function Checkout() {
   const [nameErr, setNameErr] = useState('');
   const [phoneErr, setPhoneErr] = useState('');
   const [whenErr, setWhenErr] = useState('');
+  const [orderErr, setOrderErr] = useState('');
+  const [addressErr, setAddressErr] = useState('');
+  const [codeErr, setCodeErr] = useState('');
   const [formError, setFormError] = useState('');
   const [applied, setApplied] = useState<AppliedCode | null>(null);
+
+  // Editing the cart answers whatever the server said about it.
+  useEffect(() => { setOrderErr(''); }, [lines]);
+  // A server refusal focuses its field only once the message (and, for a
+  // dropped code, the card's code box) is in the DOM — hence via an effect.
+  const [focusId, setFocusId] = useState('');
+  useEffect(() => {
+    if (!focusId) return;
+    focusFirstError([focusId]);
+    setFocusId('');
+  }, [focusId]);
 
   // Prefill name/phone once auth resolves (initial useState ran while user was null).
   useEffect(() => {
@@ -119,11 +134,13 @@ export function Checkout() {
     e.preventDefault();
     setFormError('');
     const phoneDigits = normalizePhone(phone);
-    let ok = true;
-    if (!name.trim()) { setNameErr('Please write your name.'); ok = false; } else setNameErr('');
-    if (!phoneDigits) { setPhoneErr('Please write a 10-digit phone number.'); ok = false; } else setPhoneErr('');
+    // Every check runs and every message is set; then the first failing
+    // field in page order is focused.
+    const bad: string[] = [];
+    if (!name.trim()) { setNameErr('Please write your name.'); bad.push('cust-name'); } else setNameErr('');
+    if (!phoneDigits) { setPhoneErr('Please write a 10-digit phone number.'); bad.push('cust-phone'); } else setPhoneErr('');
     if (!whenLocal) {
-      setWhenErr('Please tell us when you need the food.'); ok = false;
+      setWhenErr('Please tell us when you need the food.'); bad.push('when-field');
     } else if (hours && !kitchenOpenAt(hours, new Date(whenLocal))) {
       // Caught here so the customer is corrected before submitting; the server
       // refuses the same thing regardless.
@@ -133,9 +150,13 @@ export function Checkout() {
           ? `We are closed then. The next time we can cook is ${describeWhen(next, new Date())}.`
           : 'We are closed then. Please pick a time during our opening hours.',
       );
-      ok = false;
+      bad.push('when-field');
     } else setWhenErr('');
-    if (!ok) return;
+    if (bad.length > 0) {
+      const order = ['order-field', 'address-field', 'when-field', 'cust-name', 'cust-phone', 'offers-field'];
+      focusFirstError(order.filter((id) => bad.includes(id)));
+      return;
+    }
     setSubmitting(true);
     try {
       const body: Record<string, unknown> = {
@@ -170,11 +191,20 @@ export function Checkout() {
       navigate(`/order-success/${order_id}`);
     } catch (err) {
       const msg = (err as Error).message;
-      // The server re-checks the code on create; a refusal that names it (or
-      // "code") means it stopped qualifying — drop it so the bill is honest.
-      if (applied && (msg.includes(applied.code) || /\bcode\b/i.test(msg))) setApplied(null);
-      setFormError(msg);
+      // The refusal is one of the server's fixed sentences; put it on the
+      // field it names and take the customer there. A refusal about the code
+      // means it stopped qualifying — drop it so the bill is honest.
+      const key = checkoutFieldFor(msg, applied?.code);
+      const anchor = { order: 'order-field', address: 'address-field', when: 'when-field', name: 'cust-name', phone: 'cust-phone', code: 'offers-field', form: 'form-error' }[key];
+      if (key === 'order') setOrderErr(msg);
+      else if (key === 'address') setAddressErr(msg);
+      else if (key === 'when') setWhenErr(msg);
+      else if (key === 'name') setNameErr(msg);
+      else if (key === 'phone') setPhoneErr(msg);
+      else if (key === 'code') { setApplied(null); setCodeErr(msg); }
+      else setFormError(msg);
       toast.error(msg);
+      setFocusId(anchor);
     } finally {
       setSubmitting(false);
     }
@@ -203,11 +233,12 @@ export function Checkout() {
             component with an intrinsic width — stretched the column and put a
             horizontal scrollbar on the whole page. */}
         <form className="min-w-0 space-y-6" onSubmit={placeOrder}>
-          {formError && <FormError message={formError} />}
+          {formError && <FormError id="form-error" message={formError} />}
 
           {/* Your order — editable here; the last line removed sends them back to the menu. */}
-          <section className="card-soft p-6">
+          <section id="order-field" className="card-soft p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Your order</h2>
+            {orderErr && <FieldError message={orderErr} />}
             <div className="mt-3">
               <CartLines />
             </div>
@@ -221,17 +252,18 @@ export function Checkout() {
           </div>
 
           {/* Delivery */}
-          <section className="card-soft p-6">
+          <section id="address-field" className="card-soft p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Delivery</h2>
+            {addressErr && <FieldError message={addressErr} />}
             <div className="mt-4">
               <Field label={<>Delivery address</>} hint="(leave on pickup for pickup)">
-                <AddressPicker addresses={addresses.data?.addresses ?? []} value={address} onChange={setAddress} />
+                <AddressPicker addresses={addresses.data?.addresses ?? []} value={address} onChange={(a) => { setAddress(a); setAddressErr(''); }} />
               </Field>
             </div>
           </section>
 
           {/* When */}
-          <section className="card-soft p-6">
+          <section id="when-field" className="card-soft p-6">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">When</h2>
             <div className="mt-4 space-y-4">
               <Field label="Which day?">
@@ -274,7 +306,7 @@ export function Checkout() {
         <aside className="md:sticky md:top-20 space-y-4">
           {/* Rendered once: on a phone the aside follows the form, so this
               already sits directly above the bill. */}
-          <OffersCard subtotal={total} phone={normalizePhone(phone) ?? ''} applied={applied} onApply={setApplied} onRemove={() => setApplied(null)} />
+          <OffersCard subtotal={total} phone={normalizePhone(phone) ?? ''} applied={applied} error={codeErr} onApply={(a) => { setApplied(a); setCodeErr(''); }} onRemove={() => setApplied(null)} />
           <div className="hidden md:block">
             <UpsellStrip items={menu.data?.items ?? []} categories={menu.data?.categories ?? []} closedCategoryIds={closedIds} />
           </div>

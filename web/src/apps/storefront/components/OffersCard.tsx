@@ -7,6 +7,7 @@ import { offerText } from '../../shared/lib/discounts';
 import { rupees } from '../../shared/lib/format';
 import { Input } from '../../shared/components/ui/Input';
 import { Button } from '../../shared/components/ui/Button';
+import { FieldError } from '../../shared/components/ui/Field';
 
 export interface AppliedCode { code: string; pct: number; amount: number }
 
@@ -14,10 +15,11 @@ export interface AppliedCode { code: string; pct: number; amount: number }
  * "Offers for you": the active codes as tappable chips plus a box for a code
  * the customer already has. The server decides what a code is worth; this
  * only asks. When the cart changes under an applied code it is re-checked and
- * dropped with a toast if it no longer qualifies.
+ * dropped with a toast if it no longer qualifies. `error` is a refusal from
+ * placing the order that named the code; it shows under the code box.
  */
-export function OffersCard({ subtotal, phone, applied, onApply, onRemove }: {
-  subtotal: number; phone: string; applied: AppliedCode | null;
+export function OffersCard({ subtotal, phone, applied, error, onApply, onRemove }: {
+  subtotal: number; phone: string; applied: AppliedCode | null; error?: string;
   onApply: (a: AppliedCode) => void; onRemove: () => void;
 }) {
   const offers = useFetch(() => discountsApi.list(), []);
@@ -25,6 +27,7 @@ export function OffersCard({ subtotal, phone, applied, onApply, onRemove }: {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  useEffect(() => { if (error) setErr(error); }, [error]);
   // Generation counter: any apply / remove / re-check bumps it, so a re-check
   // that resolves after the customer has already removed or swapped the code
   // is ignored instead of resurrecting it.
@@ -61,10 +64,10 @@ export function OffersCard({ subtotal, phone, applied, onApply, onRemove }: {
   }, [subtotal, phone]);
 
   const codes = offers.data?.codes ?? [];
-  if (codes.length === 0 && !applied) return null;
+  if (codes.length === 0 && !applied && !err) return null;
 
   return (
-    <section className="card-soft p-6">
+    <section id="offers-field" className="card-soft p-6">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Offers</h2>
       {applied ? (
         <div className="mt-3 flex items-center justify-between rounded-xl border border-brand-900 bg-brand-50 px-4 py-3">
@@ -85,10 +88,10 @@ export function OffersCard({ subtotal, phone, applied, onApply, onRemove }: {
             ))}
           </ul>
           <div className="mt-3 flex gap-2">
-            <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Have a code?" aria-label="Discount code" className="font-mono" />
+            <Input value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setErr(''); }} placeholder="Have a code?" aria-label="Discount code" className="font-mono" />
             <Button type="button" variant="outline" disabled={busy || !code.trim()} onClick={() => apply(code.trim())}>Apply</Button>
           </div>
-          {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
+          {err && <FieldError message={err} />}
         </>
       )}
     </section>
