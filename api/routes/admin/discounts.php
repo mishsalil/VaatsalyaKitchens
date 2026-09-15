@@ -4,11 +4,11 @@
 require_once __DIR__ . '/../../../includes/discounts.php';
 require_once __DIR__ . '/../../../includes/settings.php';
 
-/* $budgetPct lets a caller that just wrote the setting pass it straight
-   through instead of reading it back: set_setting() does not bust
-   all_settings()'s static cache, so a setting() read in the same request
-   would still see the pre-write value. */
-function discounts_payload(PDO $pdo, ?float $budgetPct = null): array
+/* $budgetPct and $autoPause let a caller that just wrote one of those settings
+   pass it straight through instead of reading it back: set_setting() does not
+   bust all_settings()'s static cache, so a setting() read in the same request
+   would still see the pre-write value. Both are passed on to discount_paused(). */
+function discounts_payload(PDO $pdo, ?float $budgetPct = null, ?bool $autoPause = null): array
 {
     $rows = $pdo->query('SELECT * FROM discount_codes ORDER BY active DESC, FIELD(kind, \'first\', \'comeback\', \'everyday\', \'flat\', \'big\'), id')->fetchAll();
     $usage = $pdo->prepare(
@@ -26,6 +26,9 @@ function discounts_payload(PDO $pdo, ?float $budgetPct = null): array
     return [
         'budget_pct'    => $budgetPct ?? (float)setting('discount_budget_pct', '0'),
         'average_order' => discount_average_order($pdo),
+        'auto_pause'    => $autoPause ?? (setting('discount_auto_pause', '0') === '1'),
+        'paused'        => discount_paused($pdo, $budgetPct, $autoPause),
+        'month'         => discount_month_stats($pdo),
         'codes'         => $codes,
     ];
 }
@@ -39,10 +42,15 @@ function route($method, $action, $parts): void
         Response::json(discounts_payload($pdo));
     }
     if ($action === 'budget' && $method === 'POST') {
-        $pct = min(DISCOUNT_CEILING_PCT, max(0.0, (float)($_POST['pct'] ?? 0)));
+        $pct = min(DISCOUNT_BUDGET_MAX, max(0.0, (float)($_POST['pct'] ?? 0)));
         set_setting('discount_budget_pct', (string)$pct);
         discount_regenerate($pdo, $pct);
         Response::json(discounts_payload($pdo, $pct));
+    }
+    if ($action === 'auto_pause' && $method === 'POST') {
+        $on = !empty($_POST['on']);
+        set_setting('discount_auto_pause', $on ? '1' : '0');
+        Response::json(discounts_payload($pdo, null, $on));
     }
     if ($action === 'regenerate' && $method === 'POST') {
         $pct = (float)setting('discount_budget_pct', '0');

@@ -11,11 +11,12 @@ function route($method, $action, $parts): void
     if ($action === 'index' && $method === 'GET') {
         $codes = array_map(fn($r) => [
             'code'             => $r['code'],
+            'kind'             => $r['kind'],
             'pct'              => $r['pct'],
             'max_amount'       => $r['max_amount'],
             'min_order'        => $r['min_order'],
             'first_order_only' => $r['first_order_only'],
-        ], discount_active(db()));
+        ], array_filter(discount_active(db()), fn($r) => !$r['paused']));
         Response::json(['codes' => $codes]);
     }
 

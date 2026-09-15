@@ -80,7 +80,8 @@ function resolve_order_lines(PDO $pdo, array $items): array
 /* The counter's discount: a code (re-checked against this subtotal and the
    customer's phone — on an edit, the phone as just resubmitted, since an edit
    is a fresh billing decision, not a re-check of the original) plus the
-   manual percentage, refused past the ceiling. $excludeOrderId is the order
+   manual percentage. A code alone is always allowed; a manual discount stacked
+   on top of it is refused past the ceiling. $excludeOrderId is the order
    being edited, so a first-order code isn't disqualified by the very order it
    was placed on; pass null from create. Returns [$combinedPct, $codeRow|null].
    Complimentary orders carry no code. */
@@ -98,6 +99,9 @@ function counter_discount(PDO $pdo, float $subtotal, string $phone, float $manua
     if (!discount_combined_ok($codeRow['pct'], $manualPct)) {
         $m = rtrim(rtrim(number_format($manualPct, 2, '.', ''), '0'), '.');
         $c = rtrim(rtrim(number_format($codeRow['pct'], 2, '.', ''), '0'), '.');
+        if ($codeRow['pct'] > DISCOUNT_CEILING_PCT) {
+            Response::error("Discount ($m %) cannot be added on top of {$codeRow['code']} ($c %) — the ceiling is " . (int)DISCOUNT_CEILING_PCT . " %.", 422);
+        }
         Response::error("Discount ($m %) + code ($c %) exceeds the " . (int)DISCOUNT_CEILING_PCT . " % ceiling.", 422);
     }
     return [round($manualPct + $codeRow['pct'], 2), $codeRow];
