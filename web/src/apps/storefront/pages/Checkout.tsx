@@ -99,7 +99,10 @@ export function Checkout() {
 
   // ASAP isn't possible while the kitchen is shut — the customer must schedule.
   const forced = !!hours && !kitchenOpenAt(hours, asapAt(new Date()));
-  useEffect(() => { if (forced) setScheduled(true); }, [forced]);
+  // whenErr goes too: a submit whose ASAP time failed the hours check is what
+  // flips forced on, and its message would otherwise sit beside the valid
+  // slot the preselect below seeds.
+  useEffect(() => { if (forced) { setScheduled(true); setWhenErr(''); } }, [forced]);
   // Preselect the first slot once the customer schedules and hours are in
   // (unconfigured hours resolve immediately). Gated on the menu having loaded
   // so this doesn't seed a day off the default 08:00-22:00 hours before the
@@ -165,7 +168,7 @@ export function Checkout() {
       bad.push('when-field');
     } else setWhenErr('');
     if (bad.length > 0) {
-      const order = ['order-field', 'address-field', 'when-field', 'cust-name', 'cust-phone', 'offers-field'];
+      const order = ['order-field', 'when-field', 'address-field', 'cust-name', 'cust-phone', 'offers-field'];
       focusFirstError(order.filter((id) => bad.includes(id)));
       return;
     }
