@@ -18,6 +18,7 @@ import { parseMapsLink, isShortMapsLink, directionsUrl } from '../../shared/lib/
 import { usePrinterSetting } from '../hooks/usePrinterSetting';
 import { printBlocks, printerSupported, PRINTER_SETTLE_MS } from '../../shared/print/thermalPrinter';
 import { documentsFor } from '../components/PrinterBar';
+import { focusFirstError } from '../../shared/lib/focusError';
 
 /**
  * Counter order entry — the 100-200x/day lane.
@@ -108,6 +109,10 @@ export function AdminNewOrder() {
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameErr, setNameErr] = useState('');
+  const [phoneErr, setPhoneErr] = useState('');
+  const [whenErr, setWhenErr] = useState('');
+  const [linesErr, setLinesErr] = useState('');
   const [placed, setPlaced] = useState<{ id: number; total: number; complimentary: boolean } | null>(null);
   const [claimBusy, setClaimBusy] = useState(false);
   const [claimNote, setClaimNote] = useState<string | null>(null);
@@ -437,6 +442,9 @@ export function AdminNewOrder() {
       return next;
     });
 
+  // Editing the cart answers whatever the save check said about it.
+  useEffect(() => { setLinesErr(''); }, [cart]);
+
   const lines = Object.entries(cart).map(([key, entry]) => ({ key, entry, price: entryPrice(entry) }));
   const subtotal = lines.reduce((sum, l) => sum + l.price * l.entry.qty, 0);
   const meter = discountMeter(applied?.pct ?? 0, Number(discountPct) || 0);
@@ -505,7 +513,8 @@ export function AdminNewOrder() {
     setKnown(null); setCart({}); setQuery('');
     setDiscountPct(''); setDeliveryCharge(''); setComplimentary(false);
     removeCode();
-    setError(null); setPlaced(null); setClaimNote(null);
+    setError(null); setNameErr(''); setPhoneErr(''); setWhenErr(''); setLinesErr('');
+    setPlaced(null); setClaimNote(null);
     // Otherwise a failed print from the order just finished would render under
     // the next order's confirmation screen, misattributed to it.
     setPrintNote(null); setPrinting(false); setPrintSuccess(false);
@@ -580,10 +589,15 @@ export function AdminNewOrder() {
 
   const save = async () => {
     setError(null);
-    if (!name.trim()) return setError('Customer name is required.');
-    if (!normalizePhone(phone)) return setError('Enter a valid 10-digit phone number.');
-    if (!neededOn) return setError('Set when the food is needed.');
-    if (lines.length === 0) return setError('Add at least one dish.');
+    const bad: string[] = [];
+    if (!name.trim()) { setNameErr('Customer name is required.'); bad.push('no-name'); } else setNameErr('');
+    if (!normalizePhone(phone)) { setPhoneErr('Enter a valid 10-digit phone number.'); bad.push('no-phone'); } else setPhoneErr('');
+    if (!neededOn) { setWhenErr('Set when the food is needed.'); bad.push('no-when'); } else setWhenErr('');
+    if (lines.length === 0) { setLinesErr('Add at least one dish.'); bad.push('no-lines'); } else setLinesErr('');
+    if (bad.length > 0) {
+      focusFirstError(bad);
+      return;
+    }
 
     const items: AdminNewOrderLine[] = lines.map(({ entry }) => ({
       id: entry.itemId,
@@ -685,13 +699,15 @@ export function AdminNewOrder() {
       <div className="card-soft mt-4 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <CustomerSuggest
+            id="no-phone"
             label="Mobile *"
             value={phone}
-            onChange={setPhone}
+            onChange={(v) => { setPhone(v); setPhoneErr(''); }}
             onPick={applyCustomer}
             placeholder="Number or name"
             inputMode="numeric"
             className={inputClass}
+            error={phoneErr}
           />
           {known && (
             <span className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-600">
@@ -700,30 +716,35 @@ export function AdminNewOrder() {
           )}
         </div>
         <CustomerSuggest
+          id="no-name"
           label="Customer name *"
           value={name}
-          onChange={setName}
+          onChange={(v) => { setName(v); setNameErr(''); }}
           onPick={applyCustomer}
           placeholder="Start typing a name"
           className={inputClass}
+          error={nameErr}
         />
         <label className="block">
           <span className="text-xs font-semibold text-brand-600">Needed on *</span>
           {editId !== null ? (
             <input
+              id="no-when"
               value={whenText}
-              onChange={(e) => setWhenText(e.target.value)}
+              onChange={(e) => { setWhenText(e.target.value); setWhenErr(''); }}
               placeholder="e.g. Sat 20 Jul, 1:00 PM"
               className={`mt-1 ${inputClass}`}
             />
           ) : (
             <input
+              id="no-when"
               type="datetime-local"
               value={whenLocal}
-              onChange={(e) => setWhenLocal(e.target.value)}
+              onChange={(e) => { setWhenLocal(e.target.value); setWhenErr(''); }}
               className={`mt-1 ${inputClass}`}
             />
           )}
+          {whenErr && <p className="mt-1 text-xs text-red-600">{whenErr}</p>}
         </label>
         <label className="block">
           <span className="text-xs font-semibold text-brand-600">Address (blank = pickup)</span>
@@ -799,8 +820,9 @@ export function AdminNewOrder() {
 
         {/* Cart — sticky, so the running total is always visible while adding. */}
         <aside className="lg:sticky lg:top-4 lg:self-start">
-          <div className="card-soft p-4">
+          <div id="no-lines" tabIndex={-1} className="card-soft p-4">
             <h2 className="text-sm font-bold text-brand-900">Cart ({lines.length})</h2>
+            {linesErr && <p className="mt-1 text-xs text-red-600">{linesErr}</p>}
 
             {lines.length === 0 ? (
               <p className="mt-3 text-sm text-brand-400">Tap a dish to start.</p>

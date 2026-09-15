@@ -23,6 +23,8 @@ export function CustomerSuggest({
   placeholder,
   inputMode,
   className,
+  id,
+  error,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -31,6 +33,8 @@ export function CustomerSuggest({
   placeholder?: string;
   inputMode?: 'text' | 'numeric';
   className?: string;
+  id?: string;
+  error?: string;
 }) {
   const [results, setResults] = useState<AdminLookupCustomer[]>([]);
   const [open, setOpen] = useState(false);
@@ -111,6 +115,7 @@ export function CustomerSuggest({
       <label className="block">
         <span className="text-xs font-semibold text-brand-600">{label}</span>
         <input
+          id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
@@ -125,6 +130,7 @@ export function CustomerSuggest({
           className={`mt-1 ${className ?? ''}`}
         />
       </label>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
 
       {open && results.length > 0 && (
         <ul
