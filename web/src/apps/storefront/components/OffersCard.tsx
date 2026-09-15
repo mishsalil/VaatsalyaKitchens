@@ -16,18 +16,19 @@ export interface AppliedCode { code: string; pct: number; amount: number }
  * the customer already has. The server decides what a code is worth; this
  * only asks. When the cart changes under an applied code it is re-checked and
  * dropped with a toast if it no longer qualifies. `error` is a refusal from
- * placing the order that named the code; it shows under the code box.
+ * placing the order that named the code; it shows under the code box until
+ * the customer types (`onErrorClear`) or applies again.
  */
-export function OffersCard({ subtotal, phone, applied, error, onApply, onRemove }: {
+export function OffersCard({ subtotal, phone, applied, error, onApply, onRemove, onErrorClear }: {
   subtotal: number; phone: string; applied: AppliedCode | null; error?: string;
-  onApply: (a: AppliedCode) => void; onRemove: () => void;
+  onApply: (a: AppliedCode) => void; onRemove: () => void; onErrorClear?: () => void;
 }) {
   const offers = useFetch(() => discountsApi.list(), []);
   const toast = useToast();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  useEffect(() => { if (error) setErr(error); }, [error]);
+  const shown = error || err;
   // Generation counter: any apply / remove / re-check bumps it, so a re-check
   // that resolves after the customer has already removed or swapped the code
   // is ignored instead of resurrecting it.
@@ -64,7 +65,8 @@ export function OffersCard({ subtotal, phone, applied, error, onApply, onRemove 
   }, [subtotal, phone]);
 
   const codes = offers.data?.codes ?? [];
-  if (codes.length === 0 && !applied && !err) return null;
+  // Kept mounted while there is an error to show, so `offers-field` can be focused.
+  if (codes.length === 0 && !applied && !shown) return null;
 
   return (
     <section id="offers-field" className="card-soft p-6">
@@ -88,10 +90,10 @@ export function OffersCard({ subtotal, phone, applied, error, onApply, onRemove 
             ))}
           </ul>
           <div className="mt-3 flex gap-2">
-            <Input value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setErr(''); }} placeholder="Have a code?" aria-label="Discount code" className="font-mono" />
+            <Input value={code} onChange={(e) => { setCode(e.target.value.toUpperCase()); setErr(''); onErrorClear?.(); }} placeholder="Have a code?" aria-label="Discount code" className="font-mono" />
             <Button type="button" variant="outline" disabled={busy || !code.trim()} onClick={() => apply(code.trim())}>Apply</Button>
           </div>
-          {err && <FieldError message={err} />}
+          {shown && <FieldError message={shown} />}
         </>
       )}
     </section>

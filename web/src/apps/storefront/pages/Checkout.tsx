@@ -132,7 +132,7 @@ export function Checkout() {
 
   const placeOrder = async (e: FormEvent) => {
     e.preventDefault();
-    setFormError('');
+    setFormError(''); setOrderErr(''); setAddressErr('');
     const phoneDigits = normalizePhone(phone);
     // Every check runs and every message is set; then the first failing
     // field in page order is focused.
@@ -306,7 +306,7 @@ export function Checkout() {
         <aside className="md:sticky md:top-20 space-y-4">
           {/* Rendered once: on a phone the aside follows the form, so this
               already sits directly above the bill. */}
-          <OffersCard subtotal={total} phone={normalizePhone(phone) ?? ''} applied={applied} error={codeErr} onApply={(a) => { setApplied(a); setCodeErr(''); }} onRemove={() => setApplied(null)} />
+          <OffersCard subtotal={total} phone={normalizePhone(phone) ?? ''} applied={applied} error={codeErr} onApply={(a) => { setApplied(a); setCodeErr(''); }} onRemove={() => setApplied(null)} onErrorClear={() => setCodeErr('')} />
           <div className="hidden md:block">
             <UpsellStrip items={menu.data?.items ?? []} categories={menu.data?.categories ?? []} closedCategoryIds={closedIds} />
           </div>
