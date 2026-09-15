@@ -13,10 +13,9 @@ import { Field, FieldError } from '../../shared/components/ui/Field';
 import { Button } from '../../shared/components/ui/Button';
 import { FormError } from '../../shared/components/ui/FormError';
 import { OccasionSelect } from '../components/OccasionSelect';
-import { DatePicker } from '../components/DatePicker';
-import { TimePicker } from '../components/TimePicker';
+import { WhenCard } from '../components/WhenCard';
 import { kitchenOpenAt, nextOpenFrom, describeWhen } from '../../shared/lib/hours';
-import { slotsFor, firstAvailable, toLocalValue } from '../../shared/lib/timeSlots';
+import { slotsFor, firstAvailable, toLocalValue, asapAt, ASAP_TEXT } from '../../shared/lib/timeSlots';
 import { AddressPicker, type AddressPayload } from '../components/AddressPicker';
 import { BillDetails, type BillItem } from '../components/BillDetails';
 import { CartLines } from '../components/CartLines';
@@ -26,6 +25,12 @@ import { computeOrderTotal } from '../../shared/lib/gst';
 import { lineLabel, linePrice, variantsText } from '../../shared/types';
 import { PushNudge } from '../../shared/push/PushNudge';
 import { focusFirstError, checkoutFieldFor } from '../../shared/lib/focusError';
+
+/** Local `YYYY-MM-DDTHH:mm` — toISOString would shift it by the UTC offset. */
+function localIso(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
 
 /**
  * Step 2 of the guided order flow — a focused checkout. The cart is editable
@@ -49,6 +54,7 @@ export function Checkout() {
   const [name, setName] = useState(user?.name ?? '');
   const [phone, setPhone] = useState(user ? displayPhone(user.phone) : '');
   const [occasion, setOccasion] = useState('');
+  const [scheduled, setScheduled] = useState(false);
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [notes, setNotes] = useState('');
@@ -91,16 +97,20 @@ export function Checkout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addresses.data]);
 
-  // Preselect the first slot once hours arrive (unconfigured hours resolve immediately).
-  // Gated on the menu having loaded so this doesn't seed a day off the default
-  // 08:00-22:00 hours before the kitchen's real hours come in.
+  // ASAP isn't possible while the kitchen is shut — the customer must schedule.
+  const forced = !!hours && !kitchenOpenAt(hours, asapAt(new Date()));
+  useEffect(() => { if (forced) setScheduled(true); }, [forced]);
+  // Preselect the first slot once the customer schedules and hours are in
+  // (unconfigured hours resolve immediately). Gated on the menu having loaded
+  // so this doesn't seed a day off the default 08:00-22:00 hours before the
+  // kitchen's real hours come in.
   useEffect(() => {
-    if (!menu.data) return;
+    if (!scheduled || !menu.data) return;
     if (date) return;
     const f = firstAvailable(hours, new Date());
     if (f) { setDate(f.date); setTime(f.time); }
-  }, [menu.data, hours, date]);
-  const whenLocal = date && time ? toLocalValue(date, time) : '';
+  }, [scheduled, menu.data, hours, date]);
+  const scheduledLocal = date && time ? toLocalValue(date, time) : '';
   const pickDate = (d: string) => {
     setDate(d); setWhenErr('');
     const s = slotsFor(hours, d, new Date());
@@ -139,9 +149,11 @@ export function Checkout() {
     const bad: string[] = [];
     if (!name.trim()) { setNameErr('Please write your name.'); bad.push('cust-name'); } else setNameErr('');
     if (!phoneDigits) { setPhoneErr('Please write a 10-digit phone number.'); bad.push('cust-phone'); } else setPhoneErr('');
+    // ASAP is now + lead, taken at submit so the clock hasn't moved under it.
+    const whenLocal = scheduled ? scheduledLocal : localIso(asapAt(new Date()));
     if (!whenLocal) {
       setWhenErr('Please tell us when you need the food.'); bad.push('when-field');
-    } else if (hours && !kitchenOpenAt(hours, new Date(whenLocal))) {
+    } else if (scheduled && hours && !kitchenOpenAt(hours, new Date(whenLocal))) {
       // Caught here so the customer is corrected before submitting; the server
       // refuses the same thing regardless.
       const next = nextOpenFrom(hours, new Date(whenLocal));
@@ -163,7 +175,7 @@ export function Checkout() {
         name: name.trim(),
         phone: phoneDigits!,
         occasion,
-        needed_on: formatNeededOn(whenLocal),
+        needed_on: scheduled ? formatNeededOn(whenLocal) : ASAP_TEXT,
         // The raw datetime is what the server validates against opening hours;
         // needed_on stays free text for the slip and the phone call.
         needed_at: whenLocal.replace('T', ' ') + ':00',
@@ -254,17 +266,9 @@ export function Checkout() {
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-6">
               {/* When */}
-              <section id="when-field" className="card-soft p-6">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">When</h2>
-                <div className="mt-4 space-y-4">
-                  <Field label="Which day?">
-                    <DatePicker hours={hours} value={date} onChange={pickDate} />
-                  </Field>
-                  <Field label="What time?" error={whenErr}>
-                    <TimePicker hours={hours} date={date} value={time} onChange={(t) => { setTime(t); setWhenErr(''); }} />
-                  </Field>
-                </div>
-              </section>
+              <WhenCard hours={hours} scheduled={scheduled} onScheduled={(on) => { setScheduled(on); setWhenErr(''); }} forced={forced}
+                date={date} time={time} onDate={pickDate} onTime={(t) => { setTime(t); setWhenErr(''); }} error={whenErr} />
+
 
               {/* Delivery */}
               <section id="address-field" className="card-soft p-6">
