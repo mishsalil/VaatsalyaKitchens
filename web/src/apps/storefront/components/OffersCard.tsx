@@ -36,7 +36,7 @@ export function OffersCard({ subtotal, phone, applied, error, onApply, onRemove,
 
   const apply = async (c: string) => {
     gen.current++;
-    setBusy(true); setErr('');
+    setBusy(true); setErr(''); onErrorClear?.();
     try {
       onApply(await discountsApi.check({ code: c, subtotal, phone }));
       setCode('');
@@ -47,7 +47,7 @@ export function OffersCard({ subtotal, phone, applied, error, onApply, onRemove,
     }
   };
 
-  const remove = () => { gen.current++; onRemove(); };
+  const remove = () => { gen.current++; onErrorClear?.(); onRemove(); };
 
   // Re-check an applied code whenever the cart total or phone changes, after
   // a short pause so a phone being typed or a quantity being tapped up sends
