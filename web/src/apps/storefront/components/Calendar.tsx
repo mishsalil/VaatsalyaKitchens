@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MenuHours } from '../../shared/types';
 import { MAX_AHEAD_MONTHS, monthCells } from '../../shared/lib/timeSlots';
@@ -11,6 +11,9 @@ const shift = (m: string, by: number) => { const [y, mo] = m.split('-').map(Numb
 /** Month grid; today outlined, disabled days greyed, the picked day filled. */
 export function Calendar({ hours, value, onChange, now = new Date() }: { hours?: MenuHours; value: string; onChange: (date: string) => void; now?: Date }) {
   const [month, setMonth] = useState(() => (value ? value.slice(0, 7) : ym(now)));
+  // Follow the picked day's month (the preselect can seed a day in the next
+  // month); manual ‹ › browsing still works between picks.
+  useEffect(() => { if (value) setMonth(value.slice(0, 7)); }, [value]);
   const min = ym(now);
   const max = shift(min, MAX_AHEAD_MONTHS);
   const [y, mo] = month.split('-').map(Number);

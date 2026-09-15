@@ -153,7 +153,7 @@ export function Checkout() {
     const whenLocal = scheduled ? scheduledLocal : localIso(asapAt(new Date()));
     if (!whenLocal) {
       setWhenErr('Please tell us when you need the food.'); bad.push('when-field');
-    } else if (scheduled && hours && !kitchenOpenAt(hours, new Date(whenLocal))) {
+    } else if (hours && !kitchenOpenAt(hours, new Date(whenLocal))) {
       // Caught here so the customer is corrected before submitting; the server
       // refuses the same thing regardless.
       const next = nextOpenFrom(hours, new Date(whenLocal));
