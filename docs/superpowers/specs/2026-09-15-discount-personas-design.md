@@ -1,7 +1,7 @@
 # Discount codes v2: a spend target, five personas, honest reporting
 
 **Date:** 2026-09-15
-**Status:** approved
+**Status:** implemented
 **Supersedes:** the plan table in `2026-09-12-discount-codes-design.md` (everything else there stands)
 
 ## What Salil asked for

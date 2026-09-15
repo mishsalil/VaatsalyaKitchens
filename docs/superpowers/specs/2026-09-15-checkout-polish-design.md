@@ -1,7 +1,7 @@
 # Checkout polish: errors that take you there, wider pages, ASAP by default
 
 **Date:** 2026-09-15
-**Status:** approved
+**Status:** implemented
 **Builds on:** `2026-09-12-menu-cart-checkout-design.md`
 
 ## What Salil asked for
