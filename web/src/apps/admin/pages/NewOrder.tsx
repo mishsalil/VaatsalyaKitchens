@@ -595,7 +595,10 @@ export function AdminNewOrder() {
     if (!neededOn) { setWhenErr('Set when the food is needed.'); bad.push('no-when'); } else setWhenErr('');
     if (lines.length === 0) { setLinesErr('Add at least one dish.'); bad.push('no-lines'); } else setLinesErr('');
     if (bad.length > 0) {
-      focusFirstError(bad);
+      // Focus in page order — Mobile sits before Customer name in the grid,
+      // not check order.
+      const order = ['no-phone', 'no-name', 'no-when', 'no-lines'];
+      focusFirstError(order.filter((id) => bad.includes(id)));
       return;
     }
 
