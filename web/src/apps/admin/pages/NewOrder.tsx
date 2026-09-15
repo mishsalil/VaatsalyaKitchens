@@ -954,7 +954,7 @@ export function AdminNewOrder() {
             {/* The ceiling only applies when a code is in play (the server enforces
                 it the same way), so the meter appears with the code. */}
             {applied && (
-              <p className={`mt-1 text-xs ${meter.tone === 'over' ? 'font-semibold text-red-600' : meter.tone === 'warn' ? 'text-gold-800' : 'text-brand-500'}`}>
+              <p className={`mt-1 text-xs ${meter.tone === 'over' ? 'font-semibold text-red-600' : meter.tone === 'warn' || meter.tone === 'code-only' ? 'text-gold-800' : 'text-brand-500'}`}>
                 {meter.text}
               </p>
             )}

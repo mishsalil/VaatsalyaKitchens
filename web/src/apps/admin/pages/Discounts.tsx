@@ -6,7 +6,7 @@ import { useFetch } from '../../shared/hooks/useFetch';
 import { SkeletonRows } from '../../shared/components/Skeleton';
 import { useToast } from '../../shared/context/ToastContext';
 import { rupees } from '../../shared/lib/format';
-import { offerText, DISCOUNT_CEILING_PCT } from '../../shared/lib/discounts';
+import { offerText, DISCOUNT_BUDGET_MAX_PCT } from '../../shared/lib/discounts';
 
 const CODE_RE = /^[A-Z0-9]{3,12}$/;
 
@@ -16,9 +16,12 @@ function usageText(c: AdminDiscountCode): string {
 
 function CodeCard({
   row,
+  paused,
   onChange,
 }: {
   row: AdminDiscountCode;
+  /** Auto-pause has taken this code off for the month (never the first-order one). */
+  paused: boolean;
   onChange: (next: AdminDiscountsPayload) => void;
 }) {
   const toast = useToast();
@@ -78,10 +81,15 @@ function CodeCard({
   }
 
   return (
-    <li className="rounded-2xl border border-cream-200 bg-white p-4 shadow-card">
+    <li className={`rounded-2xl border border-cream-200 p-4 shadow-card ${paused ? 'bg-cream-100 opacity-60' : 'bg-white'}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="font-mono text-2xl font-bold text-brand-900">{row.code}</span>
+          {paused && (
+            <span className="rounded-full bg-gold-100 px-2.5 py-1 text-xs font-semibold text-gold-800">
+              Paused — over target this month
+            </span>
+          )}
           <button
             type="button"
             onClick={() => void copy()}
@@ -153,7 +161,7 @@ function CodeCard({
 }
 
 /**
- * The three discount codes and the budget that sizes them. Codes are generated
+ * The five discount codes and the budget that sizes them. Codes are generated
  * by the server from the budget; here they are only renamed, switched on or off,
  * copied for a message, and watched.
  */
@@ -184,8 +192,8 @@ export function AdminDiscounts() {
 
   async function saveBudget() {
     const pct = Number(budgetDraft);
-    if (!Number.isFinite(pct) || pct < 0 || pct > DISCOUNT_CEILING_PCT) {
-      setActionError(`The budget is 0–${DISCOUNT_CEILING_PCT} % of sales.`);
+    if (!Number.isFinite(pct) || pct < 0 || pct > DISCOUNT_BUDGET_MAX_PCT) {
+      setActionError(`The budget is 0–${DISCOUNT_BUDGET_MAX_PCT} % of sales.`);
       return;
     }
     setSaving(true);
@@ -212,6 +220,28 @@ export function AdminDiscounts() {
       setSaving(false);
     }
   }
+
+  async function toggleAutoPause(on: boolean) {
+    setSaving(true);
+    setActionError(null);
+    try {
+      setPayload(await adminDiscountsApi.autoPause(on));
+      toast.info(on ? 'Auto-pause is on.' : 'Auto-pause is off.');
+    } catch (e) {
+      setActionError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const month = payload?.month;
+  const overTarget = !!payload && !!month && month.pct > payload.budget_pct;
+  // How full the target bar is: the month's give-away as a share of the budget, clipped at 100 %.
+  const barPct = !payload || !month
+    ? 0
+    : payload.budget_pct > 0
+      ? Math.min(100, (month.pct / payload.budget_pct) * 100)
+      : month.pct > 0 ? 100 : 0;
 
   return (
     <div>
@@ -246,7 +276,7 @@ export function AdminDiscounts() {
                 id="discount-budget"
                 type="number"
                 min={0}
-                max={DISCOUNT_CEILING_PCT}
+                max={DISCOUNT_BUDGET_MAX_PCT}
                 step={1}
                 value={budgetDraft}
                 onChange={(e) => setBudgetDraft(e.target.value)}
@@ -263,12 +293,41 @@ export function AdminDiscounts() {
               </button>
             </div>
             <p className="mt-2 text-xs text-brand-500">
-              Regenerate switches every code back on and refreshes VK&lt;n&gt; from the budget; WELCOME and FEAST keep their names.
+              Budget = share of sales you&rsquo;ll give away; caps are sized from it. Regenerate switches every code back on and resizes the caps; renamed codes keep their names.
             </p>
             {regenerated !== null && (
               <p className="mt-2 text-sm text-green-700">Codes regenerated: {regenerated}</p>
             )}
           </section>
+
+          {month && (
+            <section className="mt-4 rounded-2xl border border-cream-200 bg-white p-4 shadow-card">
+              <p className="text-sm text-brand-800">
+                This month: {rupees(month.given)} on {rupees(month.sales)} of sales — {month.pct} % of the {payload.budget_pct} % target
+              </p>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-cream-200">
+                <div
+                  className={`h-full rounded-full ${overTarget ? 'bg-gold-500' : 'bg-green-500'}`}
+                  style={{ width: `${barPct}%` }}
+                />
+              </div>
+              <label className="mt-4 flex items-start gap-2 text-sm text-brand-800">
+                <input
+                  type="checkbox"
+                  checked={payload.auto_pause}
+                  disabled={saving}
+                  onChange={(e) => void toggleAutoPause(e.target.checked)}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="font-semibold">Auto-pause</span>
+                  <span className="block text-xs text-brand-500">
+                    When the month&rsquo;s give-away passes the target, every code except the first-order one takes a break.
+                  </span>
+                </span>
+              </label>
+            </section>
+          )}
 
           <section className="mt-4">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-brand-500">Codes</h2>
@@ -279,7 +338,7 @@ export function AdminDiscounts() {
             ) : (
               <ul className="mt-2 space-y-3">
                 {active.map((c) => (
-                  <CodeCard key={c.id} row={c} onChange={setPayload} />
+                  <CodeCard key={c.id} row={c} paused={payload.paused && c.kind !== 'first'} onChange={setPayload} />
                 ))}
               </ul>
             )}

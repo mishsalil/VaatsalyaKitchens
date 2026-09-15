@@ -263,6 +263,7 @@ export interface Order extends OrderListItem {
 /** A public discount code offer, as listed for the storefront/till. */
 export interface DiscountOffer {
   code: string;
+  kind: 'first' | 'comeback' | 'everyday' | 'flat' | 'big';
   pct: number;
   max_amount: number;
   min_order: number;

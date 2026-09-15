@@ -252,7 +252,8 @@ export interface AdminOrder extends AdminOrderListItem {
 /** One discount code as the admin discounts screen manages it. */
 export interface AdminDiscountCode extends DiscountOffer {
   id: number;
-  kind: 'first' | 'flat' | 'big';
+  /** > 0: the phone must have an earlier order and none newer than this many days. */
+  lapsed_days: number;
   active: boolean;
   created_at: string;
   uses: number;
@@ -262,6 +263,11 @@ export interface AdminDiscountCode extends DiscountOffer {
 export interface AdminDiscountsPayload {
   budget_pct: number;
   average_order: number;
+  /** This calendar month, cancelled orders excluded; pct = given / sales × 100. */
+  month: { sales: number; given: number; pct: number };
+  auto_pause: boolean;
+  /** Auto-pause is on and the month is over target: every code but the first-order one is paused. */
+  paused: boolean;
   codes: AdminDiscountCode[];
 }
 

@@ -283,6 +283,7 @@ export const adminReviewsApi = {
 export const adminDiscountsApi = {
   get: () => adminApi.get('discounts') as Promise<AdminDiscountsPayload>,
   setBudget: (pct: number) => adminApi.post('discounts/budget', { pct }) as Promise<AdminDiscountsPayload>,
+  autoPause: (on: boolean) => adminApi.post('discounts/auto_pause', { on }) as Promise<AdminDiscountsPayload>,
   regenerate: () => adminApi.post('discounts/regenerate', {}) as Promise<AdminDiscountsPayload>,
   rename: (id: number, code: string) => adminApi.post(`discounts/rename/${id}`, { code }) as Promise<AdminDiscountsPayload>,
   setActive: (id: number, active: boolean) => adminApi.post(`discounts/active/${id}`, { active }) as Promise<AdminDiscountsPayload>,
